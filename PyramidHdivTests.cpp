@@ -444,8 +444,8 @@ int main2(int argc, char *argv[])
         an.Assemble();
 #ifdef USING_BOOST
         boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
-#endif
         std::cout << "Total wall time of Assemble = " << tass2 - tass1 << " s" << std::endl;
+#endif
         
         TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
         
@@ -484,8 +484,8 @@ int main2(int argc, char *argv[])
         an.Solve();
 #ifdef USING_BOOST
         boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
-#endif
         std::cout << "Total wall time of Solve = " << tsolve2 - tsolve1 << " s" << std::endl;
+#endif
         
         if(0)
         {
@@ -552,7 +552,9 @@ int main2(int argc, char *argv[])
         out << "Norma pressao e fluxo = " << errors[0] << std::endl;
         out << "Norma L2 pressao = " << errors[1] << std::endl;
         out << "Norma L2 fluxo = " << errors[2] << std::endl;
+#ifdef USING_BOOST
         std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " s" << std::endl;
+#endif
         neqVec[i] = cmeshMult->NEquations();
         h1ErrVec[i] = errors[0];
         l2ErrVec[i] = errors[1];
@@ -562,8 +564,8 @@ int main2(int argc, char *argv[])
         std::cout << "\n**** Simulation with nelem " << nelem << " finished! ****" << std::endl;
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim2 = boost::posix_time::microsec_clock::local_time();
-#endif
         std::cout << "Total wall time of simulation = " << tsim2 - tsim1 << " s" << std::endl;
+#endif
         
         delete cmeshMult;
         delete meshvec[0];
