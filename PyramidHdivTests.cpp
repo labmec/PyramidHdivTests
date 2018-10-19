@@ -63,16 +63,17 @@ static LoggerPtr logger(Logger::getLogger("pz.pyramtests"));
 #endif
 
 using namespace pzshape;
+
 using namespace std;
 
-
-enum MVariation {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
+/// Enumerate that defines the type of approximation space
+enum EApproxSpace {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName);
 
 void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> &hSizeVec,
                                              TPZVec<REAL> &h1ErrVec, TPZVec<REAL> &l2ErrVec,
-                                             TPZVec<REAL> &semih1ErrVec, MVariation &runtype,
+                                             TPZVec<REAL> &semih1ErrVec, EApproxSpace &runtype,
                                              int &pFlux, bool &HDivMaisMais);
 TPZGeoMesh *MalhaCubo(string &projectpath, const int &nref);
 TPZGeoMesh *MalhaQuadrada(int &nelx, int &nely);
@@ -95,7 +96,7 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f);
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol);
 
 TPZAutoPointer<TPZRefPattern> PyramidRef();
-TPZAutoPointer<TPZRefPattern> PyramidRef4();
+TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra();
 
 void DividePyramids(TPZGeoMesh &gmesh);
 void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
@@ -212,11 +213,25 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f)
 }
 
 int ComputeApproximation(int argc, char *argv[]);
+
 int ConvergenceTest();
 
 
+// Class that defines all the simulation controls
+class TSimulationControl {
+    
+};
+
 int main(int argc, char *argv[])
 {
+
+#ifdef LOG4CXX
+    std::string dirname = PZSOURCEDIR;
+    std::string FileName = dirname;
+    FileName = dirname + "/Projects/PyramidHdivTests/";
+    FileName += "pyramlogfile.cfg";
+    InitializePZLOG(FileName);
+#endif
     
     ComputeApproximation(argc,argv);
     return 0;
@@ -225,27 +240,21 @@ int main(int argc, char *argv[])
 
 int ComputeApproximation(int argc, char *argv[])
 {
-    string projectpath = "/Projects/PyramidHdivTests/";
-    
-#ifdef LOG4CXX
-    std::string dirname = PZSOURCEDIR;
-    std::string FileName = dirname;
-    FileName = dirname + projectpath;
-    FileName += "pyramlogfile.cfg";
-    InitializePZLOG(FileName);
-#endif
     
 #ifdef LOG4CXX
     if (logger->isDebugEnabled()) {
         std::stringstream str;
-        str << "\nRodando testes de pyramide Hdiv" << std::endl;
+        str << std::endl;
+        str << " Runing Mixed Formulation with Pyramids. " << std::endl;
         LOGPZ_DEBUG(logger,str.str())
     }
 #endif
     
+    
+    
     // ------------------ Simulation Data -------------------
     // if no arguments, do hard code
-    MVariation runtype = ETetrahedra;
+    EApproxSpace runtype = ETetrahedra;
     int nSimulations = 2;
     int simuGap = 1;
     int pPressure = 1;
@@ -269,7 +278,7 @@ int ComputeApproximation(int argc, char *argv[])
     else if (argc == 6){ // using values given on command line
         std::cout << "\nReminder! Using parameters given by user..." << argc << std::endl;
         std::cout << "runtype (0->Tet, 1->Pyr, 2->DivPyr, 3->DivPyrIncOrd) | nSimulations | simuGap | pPressure | HDivMaisMais (0 or 1)" << argc << std::endl;
-        runtype = static_cast<MVariation>(atoi(argv[1]));
+        runtype = static_cast<EApproxSpace>(atoi(argv[1]));
         nSimulations = atoi(argv[2]);
         simuGap = atoi(argv[3]);
         pPressure = atoi(argv[4]);
@@ -298,7 +307,7 @@ int ComputeApproximation(int argc, char *argv[])
     }
     else if(runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
     {
-        pyramidref = PyramidRef4();
+        pyramidref = PyramidTo4Tetrahedra();
     }
     HDivPiola = 1;
     
@@ -2316,7 +2325,7 @@ TPZAutoPointer<TPZRefPattern> PyramidRef()
     return refpat;
 }
 
-TPZAutoPointer<TPZRefPattern> PyramidRef4()
+TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra()
 {
     TPZGeoMesh gmesh;
     gmesh.NodeVec().Resize(6);
@@ -2370,7 +2379,7 @@ TPZAutoPointer<TPZRefPattern> PyramidRef4()
 #endif
     
     TPZAutoPointer<TPZRefPattern> refpat = new TPZRefPattern(gmesh);
-    refpat->SetName("PyramidToTetraedra");
+    refpat->SetName("PyramidTo4Tetraedra");
     
     for(int sub=0; sub<4; sub++)
     {
@@ -2566,7 +2575,7 @@ void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::strin
     out << "};" << endl;
 }
 
-void GetAllStringsForVariablesInMathematica(int &pFlux, MVariation &runtype, bool &HDivMaisMais, std::string &neqstr,
+void GetAllStringsForVariablesInMathematica(int &pFlux, EApproxSpace &runtype, bool &HDivMaisMais, std::string &neqstr,
                                             std::string &hSizestr, std::string &h1Str, std::string &l2str,
                                             std::string &semih1str, std::string &plotnamestr, std::string &convrateh1str,
                                             std::string &convratel2str, std::string &convratesemih1str, std::string &ptsh1str,
@@ -2655,7 +2664,7 @@ void GetAllStringsForVariablesInMathematica(int &pFlux, MVariation &runtype, boo
 
 void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> &hSizeVec,
                                              TPZVec<REAL> &h1ErrVec, TPZVec<REAL> &l2ErrVec,
-                                             TPZVec<REAL> &semih1ErrVec, MVariation &runtype,
+                                             TPZVec<REAL> &semih1ErrVec, EApproxSpace &runtype,
                                              int &pFlux, bool &HDivMaisMais)
 {
     // ---------------- Defining filename ---------------
