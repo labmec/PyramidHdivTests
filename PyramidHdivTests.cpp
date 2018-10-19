@@ -68,6 +68,7 @@ using namespace std;
 enum MVariation {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName);
+
 void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> &hSizeVec,
                                              TPZVec<REAL> &h1ErrVec, TPZVec<REAL> &l2ErrVec,
                                              TPZVec<REAL> &semih1ErrVec, MVariation &runtype,
