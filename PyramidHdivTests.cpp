@@ -1349,6 +1349,7 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, int p, bool hdivmm)
 
 TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
 {
+    const int int_p_order = 5;
     const int matid = 1, bc0 = -1;
     const int matbcfake = 3;
     const int dirichlet = 0;
@@ -1367,7 +1368,7 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
     
     TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
     {
-        TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing);
+        TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing,int_p_order);
         force->SetPolynomialOrder(gIntegrationOrder);
         TPZAutoPointer<TPZFunction<STATE> > bodyforce = force;
 
@@ -1382,7 +1383,7 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
     TPZBndCond * BCond0 = NULL;
     BCond0 = mat->CreateBC(mat, bc0,dirichlet, val1, val2);
     {
-        TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing);
+        TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
         boundforce->SetPolynomialOrder(gIntegrationOrder);
         TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
         BCond0->SetForcingFunction(0,force);
