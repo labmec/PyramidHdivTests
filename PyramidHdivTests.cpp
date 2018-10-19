@@ -65,7 +65,7 @@ static LoggerPtr logger(Logger::getLogger("pz.pyramtests"));
 
 using namespace std;
 
-enum MVariation {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder};
+enum MVariation {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName);
 void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> &hSizeVec,
@@ -93,9 +93,12 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f);
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol);
 
 TPZAutoPointer<TPZRefPattern> PyramidRef();
+TPZAutoPointer<TPZRefPattern> PyramidRef4();
 
 void DividePyramids(TPZGeoMesh &gmesh);
 void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
+
+void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 
 
 /// verify if the pressure space is compatible with the flux space
@@ -130,6 +133,8 @@ void ExactNathan(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &
     dsol(2,0) = 0.;
     return;
 }
+
+int gIntegrationOrder = 4;
 
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &f) {
     
@@ -255,15 +260,20 @@ int main2(int argc, char *argv[])
     int pPressure = 1;
     int pFlux = pPressure;
     bool HDivMaisMais = false;
-    
+    const int nthreadsForError = 8;
+    const int nthreadForAssemble = 8;
+
     if(argc == 1){
         std::cout << "\nReminder! No arguments passed, using hard code variables\n" << argc << std::endl;
-        runtype = EPyramid;
-        nSimulations = 4;
+//        runtype = ETetrahedra;
+//        runtype = EDividedPyramidIncreasedOrder;
+        runtype = EDividedPyramid4;
+        gIntegrationOrder = 8;
+        nSimulations = 1;
         simuGap = 1;
         pPressure = 1;
         pFlux = pPressure;
-        HDivMaisMais = false;
+        HDivMaisMais = true;
     }
     else if (argc == 6){ // using values given on command line
         std::cout << "\nReminder! Using parameters given by user..." << argc << std::endl;
@@ -290,9 +300,15 @@ int main2(int argc, char *argv[])
     
     /// Some things that are always the same
     const int dim = 3;
-    const int nthreadsForError = 8;
-    const int nthreadForAssemble = 8;
-    TPZAutoPointer<TPZRefPattern> pyramidref = PyramidRef();
+    TPZAutoPointer<TPZRefPattern> pyramidref;
+    if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
+    {
+        pyramidref = PyramidRef();
+    }
+    else if(runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
+    {
+        pyramidref = PyramidRef4();
+    }
     HDivPiola = 1;
     
     
@@ -324,7 +340,7 @@ int main2(int argc, char *argv[])
         // ------------------ Creating GeoMesh -------------------
         
         //        const int nelem = 5*i+1; // num of hexes in x y and z
-        const int nelem = simuGap*i+1; // num of hexes in x y and z
+        const int nelem = simuGap << i; // num of hexes in x y and z
         std::cout << "---------- START OF SIMULATION WITH NELEM = " << nelem << " ------------" << std::endl;
         std::cout << "Creating gmesh and cmesh..." << std::endl;
         if (convergenceMesh){
@@ -353,20 +369,30 @@ int main2(int argc, char *argv[])
         int nref = 0;
         UniformRefine(gmesh, nref);
         
+        // ------------------ Generating VTK with GMesh -------------------
+        {
+            std::string geoMeshName = "../PyramidGMeshBefore.vtk";
+            std::ofstream outPara(geoMeshName);
+            TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
+        }
         // ------------------ Dividing pyramids in tets -------------------
-        if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
+        if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder ||
+           runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
         {
             DividePyramids(*gmesh);
+            DivideBoundaryElements(*gmesh);
         }
         
         // ------------------ Generating VTK with GMesh -------------------
-        //      std::string geoMeshName = "../PyramidGMesh.vtk";
-        //      std::ofstream outPara(geoMeshName);
-        //      TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
-        
+        {
+              std::string geoMeshName = "../PyramidGMesh.vtk";
+              std::ofstream outPara(geoMeshName);
+              TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
+        }
         
         // ------------------ Nothing for now -------------------
-        if (runtype == ETetrahedra || runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder) {
+        if (runtype == ETetrahedra || runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
+        {
             // the order of the elements can be increased
         }
         
@@ -386,7 +412,7 @@ int main2(int argc, char *argv[])
         meshvec[0] = CreateCmeshFlux(gmesh, pFlux,HDivMaisMais);
         TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
         
-        if (runtype == EDividedPyramidIncreasedOrder)
+        if (runtype == EDividedPyramidIncreasedOrder || runtype == EDividedPyramidIncreasedOrder4)
         {
             IncreasePyramidSonOrder(meshvec,pFlux);
         }
@@ -419,6 +445,10 @@ int main2(int argc, char *argv[])
             LOGPZ_DEBUG(logger, sout.str())
         }
 #endif
+        {
+            std::ofstream sout("cmesh.txt");
+            cmeshMult->Print(sout);
+        }
         cmeshMult->CleanUpUnconnectedNodes();
         
         bool shouldrenumber = true;
@@ -430,7 +460,7 @@ int main2(int argc, char *argv[])
         TPZSkylineStructMatrix skyl(cmeshMult);
         skyl.SetNumThreads(nthreadForAssemble);
         TPZSymetricSpStructMatrix sparse(cmeshMult);
-        sparse.SetNumThreads(8);
+        sparse.SetNumThreads(nthreadForAssemble);
         //    TPZFStructMatrix skyl(cmeshMult);
         an.SetStructuralMatrix(sparse);
         an.SetSolver(step);
@@ -504,8 +534,8 @@ int main2(int argc, char *argv[])
         std::string plotfile = "../Pyramid_Solution.vtk";
         an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
         
-        int postprocessresolution = 0;
-        //an.PostProcess(postprocessresolution);
+        int postprocessresolution = 2;
+        an.PostProcess(postprocessresolution);
         
         
         // ------------------ Doing error PostProc -------------------
@@ -515,6 +545,7 @@ int main2(int argc, char *argv[])
         out << "Debug Run\n";
 #endif
         out << "Nequations = " << cmeshMult->NEquations() << std::endl;
+        out << "Nequations before condensation = " << cmeshMult->Solution().Rows() << std::endl;
         out << "Flux order " << pFlux << std::endl;
         out << "NElements in each direction " << nelem << std::endl;
         if (runtype == ETetrahedra) {
@@ -531,6 +562,14 @@ int main2(int argc, char *argv[])
         {
             out << "Using pyramid divided by tetraedra and conforming restraints\n";
         }
+        else if(runtype == EDividedPyramid4)
+        {
+            out << "Using pyramid divided by 4 tetraedra and nonconforming restraints\n";
+        }
+        else if(runtype == EDividedPyramidIncreasedOrder4)
+        {
+            out << "Using pyramid divided by 4 tetraedra and conforming restraints\n";
+        }
         else
         {
             DebugStop();
@@ -544,7 +583,7 @@ int main2(int argc, char *argv[])
 #ifdef USING_BOOST
         boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
 #endif
-        an.PostProcessError(errors);
+        an.PostProcessError(errors,false);
 #ifdef USING_BOOST
         boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -585,6 +624,8 @@ int main2(int argc, char *argv[])
     if(runtype == EPyramid){Mathsout << "../convergenceRatesPyrMesh";}
     if(runtype == EDividedPyramid){Mathsout << "../convergenceRatesDividedPyrMesh";}
     if(runtype == EDividedPyramidIncreasedOrder){Mathsout << "../convergenceRatesDivPyrIncOrdMesh";}
+    if(runtype == EDividedPyramid4){Mathsout << "../convergenceRatesDividedPyr4Mesh";}
+    if(runtype == EDividedPyramidIncreasedOrder4){Mathsout << "../convergenceRatesDivPyr4IncOrdMesh";}
     Mathsout << pFlux;
     if (HDivMaisMais) {
         Mathsout << "MaisMais";
@@ -1325,9 +1366,13 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
     mphysics->SetDimModel(dim);
     
     TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
-    
-    TPZAutoPointer<TPZFunction<STATE> > bodyforce = new TPZDummyFunction<STATE>(BodyForcing);
-    mat->SetForcingFunction(bodyforce);
+    {
+        TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing);
+        force->SetPolynomialOrder(gIntegrationOrder);
+        TPZAutoPointer<TPZFunction<STATE> > bodyforce = force;
+
+        mat->SetForcingFunction(bodyforce);
+    }
     //inserindo o material na malha computacional
     mphysics->InsertMaterialObject(mat);
     
@@ -1336,8 +1381,12 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
     TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
     TPZBndCond * BCond0 = NULL;
     BCond0 = mat->CreateBC(mat, bc0,dirichlet, val1, val2);
-    TPZAutoPointer<TPZFunction<STATE> > force = new TPZDummyFunction<STATE>(Forcing);
-    BCond0->SetForcingFunction(0,force);
+    {
+        TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing);
+        boundforce->SetPolynomialOrder(gIntegrationOrder);
+        TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+        BCond0->SetForcingFunction(0,force);
+    }
     mphysics->InsertMaterialObject(BCond0);
     
     // a zero contribution element
@@ -1425,21 +1474,24 @@ int main1(int argc, char *argv[])
     
     if (argc == 1) {
         cout << "\nATENCAO: voce nao passou argumentos, rodando c/ parametros hardcode!" << endl;
+        nref = 2;
+        plevel = 1;
+        numthreads = 0;
     }
     else if (argc == 4) {
         nref = atoi(argv[1]);
         plevel = atoi(argv[2]);
         numthreads = atoi(argv[3]);
-        cout << "\nRodando com:" << endl;
-        cout << "nref = " << nref << endl;
-        cout << "plevel = " << plevel << endl;
-        cout << "numthreads = " << numthreads << endl;
     }
     else{
         cout << "\nERRO - Num de argumento nao especificado" << endl;
         DebugStop();
     }
-    
+    cout << "\nRodando com:" << endl;
+    cout << "nref = " << nref << endl;
+    cout << "plevel = " << plevel << endl;
+    cout << "numthreads = " << numthreads << endl;
+
     if (dim == 2) {
         cout << "\n-> Setado para rodar problema 2D com poisson simples. Parametros:" << endl;
         cout << "nelX = " << nelx << endl;
@@ -1470,7 +1522,7 @@ int main1(int argc, char *argv[])
         DebugStop();
     }
     
-    if (0) {
+    if (1) {
         std::cout << "CUIDADO - Voce esta fazendo print da gmesh em vtk !!!!!!!!!!!!!!!" << std::endl;
         std::ofstream out("GeometricMesh.vtk");
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, out, true);
@@ -2426,19 +2478,19 @@ TPZAutoPointer<TPZRefPattern> PyramidRef()
     for (int64_t i=0; i<5; i++) {
         corners[i] = nodeindexes[0][i];
     }
-    int64_t elindex;
+    int64_t elindex, subels[2];
     gmesh.CreateGeoElement(EPiramide, corners, 1, elindex);
     int64_t fatherindex = elindex;
     for (int64_t i=0; i<4; i++) {
         corners[i] = nodeindexes[1][i];
     }
-    gmesh.CreateGeoElement(ETetraedro, corners, 1, elindex);
-    gmesh.Element(elindex)->SetFather(fatherindex);
+    gmesh.CreateGeoElement(ETetraedro, corners, 1, subels[0]);
+    gmesh.Element(subels[0])->SetFather(fatherindex);
     for (int64_t i=0; i<4; i++) {
         corners[i] = nodeindexes[2][i];
     }
-    gmesh.CreateGeoElement(ETetraedro, corners, 1, elindex);
-    gmesh.Element(elindex)->SetFather(fatherindex);
+    gmesh.CreateGeoElement(ETetraedro, corners, 1, subels[1]);
+    gmesh.Element(subels[1])->SetFather(fatherindex);
     gmesh.BuildConnectivity();
     
 #ifdef LOG4CXX
@@ -2452,6 +2504,79 @@ TPZAutoPointer<TPZRefPattern> PyramidRef()
     
     TPZAutoPointer<TPZRefPattern> refpat = new TPZRefPattern(gmesh);
     refpat->SetName("PyramidToTetraedra");
+    
+    gmesh.Element(subels[0])->SetFather(-1);
+    gmesh.Element(subels[1])->SetFather(-1);
+
+    if(!gRefDBase.FindRefPattern(refpat))
+    {
+        gRefDBase.InsertRefPattern(refpat);
+        refpat->InsertPermuted();
+    }
+    return refpat;
+}
+
+TPZAutoPointer<TPZRefPattern> PyramidRef4()
+{
+    TPZGeoMesh gmesh;
+    gmesh.NodeVec().Resize(6);
+    REAL nodeco[][3] =
+    {
+        {-1,-1,0},
+        {1,-1,0},
+        {1,1,0},
+        {-1,1,0},
+        {0,0,0},
+        {0,0,1}
+    };
+    int64_t nodeindexes[][5] = {
+        {0,1,2,3,5},
+        {0,1,4,5},
+        {1,2,4,5},
+        {2,3,4,5},
+        {3,0,4,5},
+    };
+    for (int i=0; i<6; i++) {
+        TPZManVector<REAL,3> coord(3);
+        for (int c=0; c<3; c++) {
+            coord[c] = nodeco[i][c];
+        }
+        gmesh.NodeVec()[i].Initialize(coord, gmesh);
+    }
+    TPZManVector<int64_t,5> corners(5);
+    for (int64_t i=0; i<5; i++) {
+        corners[i] = nodeindexes[0][i];
+    }
+    int64_t elindex, subels[4];
+    gmesh.CreateGeoElement(EPiramide, corners, 1, elindex);
+    int64_t fatherindex = elindex;
+    for (int sub=0; sub<4; sub++)
+    {
+        for (int64_t i=0; i<4; i++) {
+            corners[i] = nodeindexes[sub+1][i];
+        }
+        gmesh.CreateGeoElement(ETetraedro, corners, 1, subels[sub]);
+        gmesh.Element(subels[sub])->SetFather(fatherindex);
+    }
+    gmesh.BuildConnectivity();
+    
+#ifdef LOG4CXX
+    if(logger->isDebugEnabled())
+    {
+        std::stringstream sout;
+        gmesh.Print(sout);
+        LOGPZ_DEBUG(logger, sout.str())
+    }
+#endif
+    
+    TPZAutoPointer<TPZRefPattern> refpat = new TPZRefPattern(gmesh);
+    refpat->SetName("PyramidToTetraedra");
+    
+    for(int sub=0; sub<4; sub++)
+    {
+        gmesh.Element(subels[sub])->SetFather(-1);
+    }
+    
     if(!gRefDBase.FindRefPattern(refpat))
     {
         gRefDBase.InsertRefPattern(refpat);
@@ -2467,17 +2592,25 @@ void DividePyramids(TPZGeoMesh &gmesh)
         DebugStop();
     }
     int64_t nel = gmesh.NElements();
+    int meshdim = gmesh.Dimension();
     for (int64_t el=0; el<nel; el++) {
         TPZGeoEl *gel = gmesh.Element(el);
         if (!gel || gel->Type() != EPiramide || gel->HasSubElement()) {
             continue;
         }
+        // an element on the quadrilateral face
         TPZGeoElSide gelside(gel,13);
+        // look for an element divided along the quadrilateral side
         TPZGeoElSide neighbour = gelside.Neighbour();
         bool hasdividedneighbour = false;
+        bool hasvolumeneighbour = false;
         while (neighbour != gelside) {
             if (neighbour.Element()->HasSubElement()) {
                 hasdividedneighbour = true;
+            }
+            if(neighbour.Element()->Dimension() == meshdim)
+            {
+                hasvolumeneighbour = true;
             }
             neighbour = neighbour.Neighbour();
         }
@@ -2495,13 +2628,55 @@ void DividePyramids(TPZGeoMesh &gmesh)
         }
         else
         {
-            TPZGeoElBC(gelside, 3);
+            if(hasvolumeneighbour)
+            {
+                TPZGeoElBC(gelside, 3);
+            }
             gel->SetRefPattern(refpat);
         }
+        // Create a geometric element along the quadrilateral side
         TPZManVector<TPZGeoEl *,2> subels(2,0);
         gel->Divide(subels);
     }
     
+}
+
+void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid)
+{
+    int64_t nel = gmesh.NElements();
+    int meshdim = gmesh.Dimension();
+    for (int64_t el=0; el<nel; el++) {
+        TPZGeoEl *gel = gmesh.Element(el);
+        int matid = gel->MaterialId();
+        if (gel->Dimension() != meshdim-1 || matid == exceptmatid) {
+            continue;
+        }
+        int nsides = gel->NSides();
+        TPZGeoElSide gelside(gel,nsides-1);
+        TPZGeoElSide neighbour = gelside.Neighbour();
+        bool shoulddivide = false;
+        while (neighbour != gelside) {
+            int nsidesub = neighbour.Element()->NSideSubElements(neighbour.Side());
+            if (nsidesub > 1) {
+                shoulddivide = true;
+            }
+            neighbour = neighbour.Neighbour();
+        }
+        if (shoulddivide) {
+            // find compatible refinement pattern
+            TPZAutoPointer<TPZRefPattern> compatible;
+            std::list<TPZAutoPointer<TPZRefPattern> > patlist;
+            TPZRefPatternTools::GetCompatibleRefPatterns(gel, patlist);
+            if (patlist.size() != 1) {
+                DebugStop();
+            }
+            compatible = *patlist.begin();
+            gel->SetRefPattern(compatible);
+            // Create a geometric element along the quadrilateral side
+            TPZManVector<TPZGeoEl *,4> subels(2,0);
+            gel->Divide(subels);
+        }
+    }
 }
 
 void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
@@ -2523,23 +2698,27 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
             continue;
         }
         TPZConnect &c = cel->Connect(0);
-        if (!c.HasDependency()) {
-            DebugStop();
-        }
+        bool hasdependency = c.HasDependency();
+//        if (!c.HasDependency()) {
+//            DebugStop();
+//        }
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
         intel->PRefine(2*pFlux);
-        
         TPZCompElSide large;
-        TPZGeoElSide gelside(gel,10);
-        large = gelside.LowerLevelCompElementList2(1);
-        if (!large) {
-            DebugStop();
-        }
-        intel->RemoveSideRestraintWithRespectTo(10,large);
-        
-        if(c.HasDependency())
+
+        if(hasdependency)
         {
-            DebugStop();
+            TPZGeoElSide gelside(gel,10);
+            large = gelside.LowerLevelCompElementList2(1);
+            if (!large) {
+                DebugStop();
+            }
+            intel->RemoveSideRestraintWithRespectTo(10,large);
+            
+            if(c.HasDependency())
+            {
+                DebugStop();
+            }
         }
         int nshape = intel->NConnectShapeF(0, 2*pFlux);
         int64_t cindex = cel->ConnectIndex(0);
@@ -2547,8 +2726,11 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         c.SetNShape(nshape);
         int64_t seqnum = c.SequenceNumber();
         meshvec[0]->Block().Set(seqnum, nshape);
-        TPZInterpolatedElement *largeintel = dynamic_cast<TPZInterpolatedElement *>(large.Element());
-        intel->RestrainSide(10, largeintel, large.Side());
+        if(hasdependency)
+        {
+            TPZInterpolatedElement *largeintel = dynamic_cast<TPZInterpolatedElement *>(large.Element());
+            intel->RestrainSide(10, largeintel, large.Side());
+        }
         //c.FirstDepend()->fDepMatrix.Print(std::cout);
     }
     meshvec[0]->ExpandSolution();
@@ -2627,6 +2809,18 @@ void GetAllStringsForVariablesInMathematica(int &pFlux, MVariation &runtype, boo
             strVec[i] << "DivPyrIncOrd";
         }
     }
+    else if(runtype == EDividedPyramid4)
+    {
+        for(int i = 0 ; i < size ; i++){
+            strVec[i] << "DivPyr4";
+        }
+    }
+    else if(runtype == EDividedPyramidIncreasedOrder4)
+    {
+        for(int i = 0 ; i < size ; i++){
+            strVec[i] << "DivPyr4IncOrd";
+        }
+    }
     else
     {
         DebugStop();
@@ -2671,6 +2865,8 @@ void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> 
     if(runtype == EPyramid){Mathsout << "convergenceRatesPyrMesh";}
     if(runtype == EDividedPyramid){Mathsout << "convergenceRatesDividedPyrMesh";}
     if(runtype == EDividedPyramidIncreasedOrder){Mathsout << "convergenceRatesDivPyrIncOrdMesh";}
+    if(runtype == EDividedPyramid4){Mathsout << "convergenceRatesDividedPyr4Mesh";}
+    if(runtype == EDividedPyramidIncreasedOrder4){Mathsout << "convergenceRatesDivPyr4IncOrdMesh";}
     Mathsout << pFlux;
     if (HDivMaisMais) {
         Mathsout << "MaisMais";
