@@ -62,8 +62,9 @@
 static LoggerPtr logger(Logger::getLogger("pz.pyramtests"));
 #endif
 
-
+using namespace pzshape;
 using namespace std;
+
 
 enum MVariation {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
@@ -210,30 +211,19 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f)
     }
 }
 
-int main1(int argc, char *argv[]);
-int main2(int argc, char *argv[]);
+int ComputeApproximation(int argc, char *argv[]);
 int ConvergenceTest();
 
 
 int main(int argc, char *argv[])
 {
-    //    ConvergenceTest();
-    //    return 0;
-    const int mainChoser = 2;
-    if (mainChoser == 1) { // Old code to solve a problem (do we still use it?)
-        main1(argc, argv);
-    }
-    else if (mainChoser == 2){ // Phil's tests
-        main2(argc,argv);
-    }
     
+    ComputeApproximation(argc,argv);
     return 0;
 }
 
-using namespace pzshape;
 
-
-int main2(int argc, char *argv[])
+int ComputeApproximation(int argc, char *argv[])
 {
     string projectpath = "/Projects/PyramidHdivTests/";
     
@@ -1429,198 +1419,6 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec)
     
     return mphysics;
 }
-
-int main1(int argc, char *argv[])
-{
-    
-    //    TTimer tref;
-    //    tref.start();
-    //    gRefDBase.InitializeUniformRefPattern(ETetraedro);
-    //    gRefDBase.InitializeUniformRefPattern(ETriangle);
-    //    gRefDBase.InitializeUniformRefPattern(EPiramide);
-    //    tref.stop();
-    //    cout << "\ntempo de refpattern = " << tref.seconds() << endl;
-    
-    
-    string projectpath = "/Projects/PyramidHdivTests/";
-    
-#ifdef LOG4CXX
-    if (logger->isDebugEnabled()){
-        std::string dirname = PZSOURCEDIR;
-        std::string FileName = dirname;
-        FileName = dirname + projectpath;
-        FileName += "pyramlogfile.cfg";
-        InitializePZLOG(FileName);
-    }
-#endif
-    
-#ifdef LOG4CXX
-    if (logger->isDebugEnabled()) {
-        std::stringstream str;
-        str << "\nRodando testes de piramede Hdiv" << std::endl;
-        LOGPZ_DEBUG(logger,str.str())
-    }
-#endif
-    
-    // Parametros
-    int dim = 3;
-    int plevel = 1;
-    int numthreads = 2;
-    
-    // Para 2D
-    int nelx = 100;
-    int nely = 100;
-    
-    // Para 3D
-    int nref = 2;
-    
-    if (argc == 1) {
-        cout << "\nATENCAO: voce nao passou argumentos, rodando c/ parametros hardcode!" << endl;
-        nref = 2;
-        plevel = 1;
-        numthreads = 0;
-    }
-    else if (argc == 4) {
-        nref = atoi(argv[1]);
-        plevel = atoi(argv[2]);
-        numthreads = atoi(argv[3]);
-    }
-    else{
-        cout << "\nERRO - Num de argumento nao especificado" << endl;
-        DebugStop();
-    }
-    cout << "\nRodando com:" << endl;
-    cout << "nref = " << nref << endl;
-    cout << "plevel = " << plevel << endl;
-    cout << "numthreads = " << numthreads << endl;
-
-    if (dim == 2) {
-        cout << "\n-> Setado para rodar problema 2D com poisson simples. Parametros:" << endl;
-        cout << "nelX = " << nelx << endl;
-        cout << "nely = " << nely << endl;
-        cout << "plevel = " << plevel << endl;
-        cout << "numthreads = " << numthreads << endl;
-    }
-    else if (dim == 3){
-        cout << "\n-> Setado para rodar problema do cubo 3D com elasticidade lienar. Parametros:" << endl;
-        cout << "nref = " << nref << endl;
-        cout << "plevel = " << plevel << endl;
-        cout << "numthreads = " << numthreads << endl;
-    }
-    
-    // Malha Geometrica
-    cout << "\nCriando a gmesh... "; cout.flush();
-    //    TTimer timer;
-    //    timer.start();
-    TPZGeoMesh *gmesh = NULL;
-    if (dim == 3){
-        
-        gmesh = MalhaCubo(projectpath,nref);
-    }
-    else if (dim == 2){
-        gmesh = MalhaQuadrada(nelx,nely);
-    }
-    else{
-        DebugStop();
-    }
-    
-    if (1) {
-        std::cout << "CUIDADO - Voce esta fazendo print da gmesh em vtk !!!!!!!!!!!!!!!" << std::endl;
-        std::ofstream out("GeometricMesh.vtk");
-        TPZVTKGeoMesh::PrintGMeshVTK(gmesh, out, true);
-    }
-    //    timer.stop();
-    //    cout << timer.seconds() << " s" << endl;
-    
-    // Malha computacional
-    cout << "\nCriando a cmesh... "; cout.flush();
-    //    timer.start();
-    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
-    cmesh = new TPZCompMesh(gmesh);
-    cmesh->SetDimModel(dim);
-    cmesh->SetDefaultOrder(plevel);
-    if (dim == 3) {
-        InsertElasticityCubo(cmesh);
-    }
-    else if (dim == 2){
-        InsertBidimensionalPoisson(cmesh,dim);
-    }
-    else{
-        DebugStop();
-    }
-    
-    cmesh->AutoBuild();
-    //    timer.stop();
-    //    cout << timer.seconds() << " s" << endl;
-    std::cout << "Numero de equacoes = " << cmesh->NEquations() << std::endl;
-    cout << "Num elements = " << cmesh->NElements() << endl;
-    
-    // Analysis
-    cout << "\nCriando o analysis... "; cout.flush();
-    //    timer.start();
-    TPZAnalysis an(cmesh);
-    TPZStepSolver<STATE> step;
-    step.SetDirect(ECholesky);
-    TPZSkylineStructMatrix skyl(cmesh);
-    skyl.SetNumThreads(numthreads);
-    an.SetStructuralMatrix(skyl);
-    an.SetSolver(step);
-    //    timer.stop();
-    //    cout << timer.seconds() << " s" << endl;
-    
-    // Resolvendo
-    cout << "\nComecando o assemble... "; cout.flush();
-    //    timer.start();
-    an.Assemble();
-    //    timer.stop();
-    cout << "\nRodando com:" << endl;
-    cout << "nref = " << nref << endl;
-    cout << "plevel = " << plevel << endl;
-    cout << "numthreads = " << numthreads << endl;
-    std::cout << "Numero de equacoes = " << cmesh->NEquations() << std::endl;
-    //    cout << "Assemble executado em " <<  timer.seconds() << " s" << endl;
-    
-    
-    std::string exePath(argv[0]);
-    stringstream ss;
-    ss << numthreads;
-    string strnthreads = ss.str();
-    string filename = exePath + ".txt";// + "_nthreads_" + strnthreads + ".txt";
-    ofstream out;
-    if (numthreads == 0) {
-        out.open(filename.c_str());
-    }else{
-        out.open(filename.c_str(), ofstream::out | ofstream::app);
-    }
-    
-    out << "\nRodando com:" << endl;
-    out << "nref = " << nref << endl;
-    out << "plevel = " << plevel << endl;
-    out << "numthreads = " << numthreads << endl;
-    //    out << "T assemble = " << timer.seconds() << endl;
-    
-    return 0;
-    
-    an.Solve();
-    // Pos Processamento
-    TPZStack<string> scalnames, vecnames;
-    if (dim == 3) {
-        scalnames.Push("StressX");
-        vecnames.Push("state");
-    }
-    else if (dim == 2){
-        scalnames.Push("Solution");
-    }
-    
-    string plotfile = "ResultMesh.vtk";
-    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-    an.PostProcess(0);
-    
-    std::cout << "FINISHED" << std::endl;
-    return 0;
-}
-
-
 
 // ------------------------ Para testes do assemble -----------------------------
 
