@@ -21,10 +21,10 @@ s = 10.0; // amplification factor for the wellbore box
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
-n_radial = 5;
-n_azimuthal = 5; 
-n_vertical = 5;
-radial_progression = 1.75;
+n_radial = 8;
+n_azimuthal = 8; 
+n_vertical = 8;
+radial_progression = 1.25;
 
 ////////////////////////////////////////////////////////////////
 // Mesh Type

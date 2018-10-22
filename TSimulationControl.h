@@ -16,7 +16,7 @@
 
 
 /// Enumerate that defines the type of approximation space
-enum EApproxSpace {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
+enum EApproxSpace {ETetrahedra, EPyramid, EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
 /// Enumerate that defines the type of geometry type
 enum EGeometryType {EAcademic, EVerticalWellbore};

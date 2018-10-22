@@ -180,9 +180,9 @@ EndIf
 // Tagging
 Physical Volume("reservoir") = {reservoir[],wellbore_region[]};
 //Physical Volume("wellbore") = {wellbore_region[]};
-//Physical Surface("outer_bc") = {reservoir_bc[]};
+Physical Surface("outer_bc") = {reservoir_bc[]};
 Physical Surface("inner_bc") = {wellbore_bc[]};
-Physical Surface("non_flux_bc") = {reservoir_bc[],top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
+Physical Surface("non_flux_bc") = {top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
 
 
 Another_entities = 0;
