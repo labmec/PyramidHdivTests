@@ -258,6 +258,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
     }
 #endif
 
+    EApproxSpace run_type = sim_control->m_run_type;
+    int p_order = sim_control->m_approx_order;
+    int hdiv_pp_Q = sim_control->m_Hdiv_plusplus_Q;
+    int n_elements = sim_control->m_n_elements;
+    int n_simulations  = sim_control->m_h_levels;
     const int dim = 3;
     
     /// Hard code controls
@@ -266,7 +271,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
     const int n_threads_error = 4;
     const int n_threads_assembly = 4;
     bool keep_lagrangian_multiplier_Q = true;
-    int n_elements = sim_control->m_n_elements;
     TPZGeoMesh *gmesh = NULL;
     
     
@@ -286,19 +290,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
     //    return 0;
     
     //   gRefDBase.InitializeAllUniformRefPatterns();
-    int n_simulations  = sim_control->m_h_levels;
+
     TPZManVector<REAL,20> neqVec(n_simulations,0.);
     TPZManVector<REAL,20> hSizeVec(n_simulations,0.);
     TPZManVector<REAL,20> h1ErrVec(n_simulations,0.);
     TPZManVector<REAL,20> l2ErrVec(n_simulations,0.);
     TPZManVector<REAL,20> semih1ErrVec(n_simulations,0.);
-    
-    /// Defining the type o geometry
-    TPZAcademicGeoMesh academic;
-    academic.SetMeshType(TPZAcademicGeoMesh::EPyramid);
-    if (sim_control->m_run_type == ETetrahedra) {
-        academic.SetMeshType(TPZAcademicGeoMesh::ETetrahedra);
-    }
     
     for (int i = 0 ; i < n_simulations ; i++){
 #ifdef USING_BOOST
@@ -307,8 +304,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
         gmesh = GeometryConstruction(sim_control);
         
         TPZManVector<TPZCompMesh*,2> meshvec(2);
-        int p_order = sim_control->m_approx_order;
-        int hdiv_pp_Q = sim_control->m_Hdiv_plusplus_Q;
         
         /// Construction for Hdiv (velocity) approximation space
         meshvec[0] = CreateCmeshFlux(gmesh, p_order,hdiv_pp_Q);
@@ -318,7 +313,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         meshvec[1] = CreateCmeshPressure(gmesh, p_order, hdiv_pp_Q);
         LoadSolution(meshvec[1]);
         
-        if (sim_control->m_run_type == EDividedPyramidIncreasedOrder || sim_control->m_run_type == EDividedPyramidIncreasedOrder4)
+        if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
         {
             IncreasePyramidSonOrder(meshvec,p_order);
         }
@@ -403,13 +398,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
         std::cout << "Total wall time of Solve = " << tsolve2 - tsolve1 << " s" << std::endl;
 #endif
         
-//        if(0)
-//        {
-//            std::ofstream sol("../SolComputed.txt");
-//            sol << "Solution obtained by matrix inversion\n";
-//            an.PrintVectorByElement(sol, cmeshMult->Solution(),1.e-8);
-//        }
-        
         std::cout << "Solved!" << std::endl;
         
         // ------------------ Post Processing VTK -------------------
@@ -433,26 +421,26 @@ int ComputeApproximation(TSimulationControl * sim_control)
         out << "Nequations = " << cmeshMult->NEquations() << std::endl;
         out << "Nequations before condensation = " << cmeshMult->Solution().Rows() << std::endl;
         out << "Flux order " << p_order << std::endl;
-        out << "NElements in each direction " << nelem << std::endl;
-        if (sim_control->m_run_type == ETetrahedra) {
+        out << "NElements in each direction " << n_elements << std::endl;
+        if (run_type == ETetrahedra) {
             out << "Using tetrahedral elements\n";
         }
-        else if (sim_control->m_run_type == EPyramid) {
+        else if (run_type == EPyramid) {
             out << "Using pyramid elements\n";
         }
-        else if(sim_control->m_run_type == EDividedPyramid)
+        else if(run_type == EDividedPyramid)
         {
             out << "Using pyramid divided by tetraedra and nonconforming restraints\n";
         }
-        else if(sim_control->m_run_type == EDividedPyramidIncreasedOrder)
+        else if(run_type == EDividedPyramidIncreasedOrder)
         {
             out << "Using pyramid divided by tetraedra and conforming restraints\n";
         }
-        else if(sim_control->m_run_type == EDividedPyramid4)
+        else if(run_type == EDividedPyramid4)
         {
             out << "Using pyramid divided by 4 tetraedra and nonconforming restraints\n";
         }
-        else if(sim_control->m_run_type == EDividedPyramidIncreasedOrder4)
+        else if(run_type == EDividedPyramidIncreasedOrder4)
         {
             out << "Using pyramid divided by 4 tetraedra and conforming restraints\n";
         }
@@ -505,20 +493,20 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     std::string mathematicaFilename = "NoName.nb";
     std::stringstream Mathsout;
-    if(runtype == ETetrahedra){Mathsout << "../convergenceRatesTetMesh";}
-    if(runtype == EPyramid){Mathsout << "../convergenceRatesPyrMesh";}
-    if(runtype == EDividedPyramid){Mathsout << "../convergenceRatesDividedPyrMesh";}
-    if(runtype == EDividedPyramidIncreasedOrder){Mathsout << "../convergenceRatesDivPyrIncOrdMesh";}
-    if(runtype == EDividedPyramid4){Mathsout << "../convergenceRatesDividedPyr4Mesh";}
-    if(runtype == EDividedPyramidIncreasedOrder4){Mathsout << "../convergenceRatesDivPyr4IncOrdMesh";}
-    Mathsout << pFlux;
-    if (HDivMaisMais) {
-        Mathsout << "MaisMais";
+    if(run_type == ETetrahedra){Mathsout << "../convergenceRatesTetMesh";}
+    if(run_type == EPyramid){Mathsout << "../convergenceRatesPyrMesh";}
+    if(run_type == EDividedPyramid){Mathsout << "../convergenceRatesDividedPyrMesh";}
+    if(run_type == EDividedPyramidIncreasedOrder){Mathsout << "../convergenceRatesDivPyrIncOrdMesh";}
+    if(run_type == EDividedPyramid4){Mathsout << "../convergenceRatesDividedPyr4Mesh";}
+    if(run_type == EDividedPyramidIncreasedOrder4){Mathsout << "../convergenceRatesDivPyr4IncOrdMesh";}
+    Mathsout << sim_control->m_approx_order;
+    if (sim_control->m_Hdiv_plusplus_Q) {
+        Mathsout << "plusplus";
     }
     Mathsout << ".nb";
     mathematicaFilename = Mathsout.str();
     
-    GenerateMathematicaWithConvergenceRates(neqVec,hSizeVec,h1ErrVec,l2ErrVec,semih1ErrVec,runtype,pFlux,HDivMaisMais);
+    GenerateMathematicaWithConvergenceRates(neqVec,hSizeVec,h1ErrVec,l2ErrVec,semih1ErrVec,run_type,sim_control->m_approx_order,sim_control->m_Hdiv_plusplus_Q);
     
     std::cout << "Code finished! file " << mathematicaFilename << " written" << std::endl;
     
@@ -530,17 +518,24 @@ int ComputeApproximation(TSimulationControl * sim_control)
 TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
     
     // ------------------ Creating GeoMesh -------------------
-    TPZGeoMesh gmesh = new TPZGeoMesh;
+    TPZGeoMesh * gmesh = new TPZGeoMesh;
+    EApproxSpace run_type = sim_control->m_run_type;
     
     const int nelem = sim_control->m_n_elements; // num of hexes in x y and z
     std::cout << "Creating geometry description." << std::endl;
     
     const int matid = 1;
+    /// Defining the type o geometry
+    TPZAcademicGeoMesh academic;
+    academic.SetMeshType(TPZAcademicGeoMesh::EPyramid);
+    if (sim_control->m_run_type == ETetrahedra) {
+        academic.SetMeshType(TPZAcademicGeoMesh::ETetrahedra);
+    }
     TPZManVector<int,6> BCids(6,-1); // ids of the bcs
     academic.SetBCIDVector(BCids);
     academic.SetMaterialId(matid);
     academic.SetNumberElements(nelem);
-    if (runtype != ETetrahedra) {
+    if (run_type != ETetrahedra) {
         gmesh = academic.PyramidalAndTetrahedralMesh();
     }
     else
@@ -559,8 +554,8 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
     }
     // ------------------ Dividing pyramids in tets -------------------
-    if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder ||
-       runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
+    if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
+       run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
     {
         DividePyramids(*gmesh);
         DivideBoundaryElements(*gmesh);
