@@ -200,6 +200,8 @@ Physical Line("outer_v_edges") = {outer_v_edges[]};
 Physical Line("radial_edges") = {radial_edges[]};
 EndIf
 
+Coherence;
+
 // optimize the mesh
 Mesh.Optimize = 1;
 Mesh  3;

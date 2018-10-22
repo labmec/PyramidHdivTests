@@ -107,10 +107,10 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-#define Solution_Sine
+//#define Solution_Sine
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
-//#define Solution_Dupuit_Thiem
+#define Solution_Dupuit_Thiem
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu){
     
@@ -143,7 +143,7 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu
     
 #ifdef Solution_Dupuit_Thiem
     REAL x = pt[0];
-    REAL y = pt[0];
+    REAL y = pt[1];
     
     gradu.Resize(4,1);
     
@@ -163,7 +163,7 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu
     REAL Thetaunity = costheta;
     REAL Thetaunitz = 0.0;
     
-    u[0] = log(r/r0);
+    u[0] = 20 + log(r/r0);
     
     REAL dfdr = 1.0/r;
     REAL dfdTheta = 0.0;
@@ -179,7 +179,7 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu
 }
 
 
-int gIntegrationOrder = 4;
+int gIntegrationOrder = 5;
 
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &f) {
     
@@ -377,7 +377,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 
         /// Construction for L2 (pressure) approximation space
         meshvec[1] = CreateCmeshPressure(gmesh, sim_control);
-        LoadSolution(meshvec[1]);
+//        LoadSolution(meshvec[1]);
         
         if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
         {
@@ -616,6 +616,8 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
             REAL s = 1.0;
             Geometry.SetfDimensionlessL(s);
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
+//            std::string gmsh_file("vertical_wellbore_Te.msh");
+//            std::string gmsh_file("vertical_wellbore_He.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
 #ifdef PZDEBUG
@@ -1378,7 +1380,9 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control)
             
         }
             break;
-        default:
+        default:{
+            DebugStop();
+        }
             break;
     }
     
@@ -1479,21 +1483,20 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
             TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
             bc_outer->SetForcingFunction(0,force);
             mphysics->InsertMaterialObject(bc_outer);
-            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
             bc_inner->SetForcingFunction(0,force);
             mphysics->InsertMaterialObject(bc_inner);
-            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
             bc_impervious->SetForcingFunction(0,force);
             mphysics->InsertMaterialObject(bc_impervious);
             
         }
             break;
-        default:
+        default:{
+            DebugStop();
+        }
             break;
     }
-    
-
-    
     
     mphysics->SetAllCreateFunctionsMultiphysicElem();
     
