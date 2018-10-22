@@ -41,12 +41,13 @@
 #include "pzelchdiv.h"
 #include "pzshapetetra.h"
 #include "pzelementgroup.h"
-
+#include "TPZVecL2.h"
+#include "pzmatrix.h"
 #include "TPZAcademicGeoMesh.h"
 
-#include "TPZVecL2.h"
+// Simulation Control
+#include "TSimulationControl.h"
 
-#include "pzmatrix.h"
 
 #include "run_stats_table.h"
 #ifdef USING_TBB
@@ -66,11 +67,7 @@ using namespace pzshape;
 
 using namespace std;
 
-/// Enumerate that defines the type of approximation space
-enum EApproxSpace {ETetrahedra, EPyramid,EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
 
-/// Enumerate that defines the type of geometry type
-enum EGeometryType {EAcademic, EVerticalWellbore};
 
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName);
 
@@ -215,105 +212,16 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f)
     }
 }
 
-int ComputeApproximation(int argc, char *argv[]);
-
 int ConvergenceTest();
 
+int ComputeApproximation(TSimulationControl * sim_control);
 
-// Class that defines all the simulation controls
-class TSimulationControl {
-    
-public:
-    
-    /// Type of approximation space
-    EApproxSpace m_run_type;
-    
-    /// Type of geometry description
-    EGeometryType m_geometry_type;
-    
-    /// Number of h refinements for H convergence
-    int m_h_levels;
-    
-    /// Number of elements in x, y and z
-    int m_n_elements;
-    
-    /// Stride size to define where the refine patterns are applied
-    int m_cartesian_stride;
-    
-    /// Polynomial approximation order
-    int m_approx_order;
-    
-    /// Directive for the use of augmented pressure accuracy
-    bool m_Hdiv_plusplus_Q;
-    
-public:
-    
-    /// Default constructor
-    TSimulationControl(){
-        
-        m_run_type          = ETetrahedra;
-        m_geometry_type     = EAcademic;
-        m_h_levels          = 0;
-        m_n_elements        = 1;
-        m_cartesian_stride  = 1;
-        m_approx_order      = 1;
-        m_Hdiv_plusplus_Q   = 0;
-        
-    }
-    
-    /// Destructor
-    ~TSimulationControl(){
-        
-    }
-    
-    /// Constructor based on char *argv[]
-    TSimulationControl(char *argv[]){
-        
-        m_run_type          = static_cast<EApproxSpace>(atoi(argv[1]));
-        m_geometry_type     = static_cast<EGeometryType>(atoi(argv[2]));
-        m_h_levels          = atoi(argv[3]);
-        m_n_elements        = atoi(argv[4]);
-        m_cartesian_stride  = atoi(argv[5]);
-        m_approx_order      = atoi(argv[6]);
-        m_Hdiv_plusplus_Q   = atoi(argv[7]);
-        
-    }
-    
-    /// Copy Constructor
-    TSimulationControl(const TSimulationControl &other){
-        
-        m_run_type          = other.m_run_type;
-        m_geometry_type     = other.m_geometry_type;
-        m_h_levels          = other.m_h_levels;
-        m_n_elements        = other.m_n_elements;
-        m_cartesian_stride  = other.m_cartesian_stride;
-        m_approx_order      = other.m_approx_order;
-        m_Hdiv_plusplus_Q   = other.m_Hdiv_plusplus_Q;
-        
-    }
-    
-    /// Copy Constructor
-    TSimulationControl & operator=(const TSimulationControl &other){
-        
-        if (this != &other) {
-            m_run_type          = other.m_run_type;
-            m_geometry_type     = other.m_geometry_type;
-            m_h_levels          = other.m_h_levels;
-            m_n_elements        = other.m_n_elements;
-            m_cartesian_stride  = other.m_cartesian_stride;
-            m_approx_order      = other.m_approx_order;
-            m_Hdiv_plusplus_Q   = other.m_Hdiv_plusplus_Q;
-        }
-        
-        return *this;
-        
-    }
-    
-    
-};
+TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control);
 
 int main(int argc, char *argv[])
 {
+    /// Global controls
+    HDivPiola = 1;
 
 #ifdef LOG4CXX
     std::string dirname = PZSOURCEDIR;
@@ -323,12 +231,22 @@ int main(int argc, char *argv[])
     InitializePZLOG(FileName);
 #endif
     
-    ComputeApproximation(argc,argv);
+    TSimulationControl * sim_control = NULL;
+    if(argc != 8){
+        sim_control = new TSimulationControl;
+    }
+    else{
+        sim_control = new TSimulationControl(argv);
+    }
+    std::cout << "Simulation control object with parameters " << std::endl;
+    sim_control->Print();
+    
+    ComputeApproximation(sim_control);
     return 0;
 }
 
 
-int ComputeApproximation(int argc, char *argv[])
+int ComputeApproximation(TSimulationControl * sim_control)
 {
     
 #ifdef LOG4CXX
@@ -339,67 +257,28 @@ int ComputeApproximation(int argc, char *argv[])
         LOGPZ_DEBUG(logger,str.str())
     }
 #endif
-    
-    
-    
-    // ------------------ Simulation Data -------------------
-    // if no arguments, do hard code
-    EApproxSpace runtype = ETetrahedra;
-    int nSimulations = 2;
-    int simuGap = 1;
-    int pPressure = 1;
-    int pFlux = pPressure;
-    bool HDivMaisMais = false;
-    const int nthreadsForError = 8;
-    const int nthreadForAssemble = 8;
 
-    if(argc == 1){
-        std::cout << "\nReminder! No arguments passed, using hard code variables\n" << argc << std::endl;
-//        runtype = ETetrahedra;
-//        runtype = EDividedPyramidIncreasedOrder;
-        runtype = EDividedPyramid4;
-        gIntegrationOrder = 8;
-        nSimulations = 1;
-        simuGap = 1;
-        pPressure = 1;
-        pFlux = pPressure;
-        HDivMaisMais = true;
-    }
-    else if (argc == 6){ // using values given on command line
-        std::cout << "\nReminder! Using parameters given by user..." << argc << std::endl;
-        std::cout << "runtype (0->Tet, 1->Pyr, 2->DivPyr, 3->DivPyrIncOrd) | nSimulations | simuGap | pPressure | HDivMaisMais (0 or 1)" << argc << std::endl;
-        runtype = static_cast<EApproxSpace>(atoi(argv[1]));
-        nSimulations = atoi(argv[2]);
-        simuGap = atoi(argv[3]);
-        pPressure = atoi(argv[4]);
-        pFlux = pPressure;
-        HDivMaisMais = atoi(argv[5]);
-    }
-    else{
-        std::cout << "\nError! Not recognized number of arguments passed on launch. Should be:" << argc << std::endl;
-        std::cout << "runtype (0->Tet, 1->Pyr, 2->DivPyr, 3->DivPyrIncOrd) | nSimulations | simuGap | pPressure | HDivMaisMais (0 or 1)" << argc << std::endl;
-        DebugStop();
-    }
-    
-    std::cout << "runtype = " << runtype << std::endl;
-    std::cout << "nSimulations = " << nSimulations << std::endl;
-    std::cout << "simuGap = " << simuGap << std::endl;
-    std::cout << "pPressure = " << pPressure << std::endl;
-    std::cout << "pFlux = " << pFlux << std::endl;
-    std::cout << "HDivMaisMais = " << HDivMaisMais << std::endl;
-    
-    /// Some things that are always the same
     const int dim = 3;
+    
+    /// Hard code controls
+    bool should_renumber_Q = true;
+    bool use_pardiso_Q = true;
+    const int n_threads_error = 4;
+    const int n_threads_assembly = 4;
+    bool keep_lagrangian_multiplier_Q = true;
+    int n_elements = sim_control->m_n_elements;
+    TPZGeoMesh *gmesh = NULL;
+    
+    
     TPZAutoPointer<TPZRefPattern> pyramid_ref_pattern;
-    if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
-    {
-        pyramid_ref_pattern = PyramidRef();
-    }
-    else if(runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
-    {
+    bool refine_into_4_tetrahedra_Q = sim_control->m_run_type == EDividedPyramid4 || sim_control->m_run_type == EDividedPyramidIncreasedOrder4;
+    if(refine_into_4_tetrahedra_Q){
         pyramid_ref_pattern = PyramidTo4Tetrahedra();
     }
-    HDivPiola = 1;
+    else {
+        pyramid_ref_pattern = PyramidRef();
+    }
+
     
     
     /// verify if the pressure space is compatible with the flux space
@@ -407,107 +286,42 @@ int ComputeApproximation(int argc, char *argv[])
     //    return 0;
     
     //   gRefDBase.InitializeAllUniformRefPatterns();
+    int n_simulations  = sim_control->m_h_levels;
+    TPZManVector<REAL,20> neqVec(n_simulations,0.);
+    TPZManVector<REAL,20> hSizeVec(n_simulations,0.);
+    TPZManVector<REAL,20> h1ErrVec(n_simulations,0.);
+    TPZManVector<REAL,20> l2ErrVec(n_simulations,0.);
+    TPZManVector<REAL,20> semih1ErrVec(n_simulations,0.);
     
-    // ------------------ Setting type o GeoMesh -------------------
-    
+    /// Defining the type o geometry
     TPZAcademicGeoMesh academic;
     academic.SetMeshType(TPZAcademicGeoMesh::EPyramid);
-    if (runtype == ETetrahedra) {
+    if (sim_control->m_run_type == ETetrahedra) {
         academic.SetMeshType(TPZAcademicGeoMesh::ETetrahedra);
     }
     
-    bool convergenceMesh = true;
-    TPZGeoMesh *gmesh = NULL;
-    TPZManVector<REAL,20> neqVec(nSimulations,0.);
-    TPZManVector<REAL,20> hSizeVec(nSimulations,0.);
-    TPZManVector<REAL,20> h1ErrVec(nSimulations,0.);
-    TPZManVector<REAL,20> l2ErrVec(nSimulations,0.);
-    TPZManVector<REAL,20> semih1ErrVec(nSimulations,0.);
-    for (int i = 0 ; i < nSimulations ; i++){
+    for (int i = 0 ; i < n_simulations ; i++){
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
-        // ------------------ Creating GeoMesh -------------------
+        gmesh = GeometryConstruction(sim_control);
         
-        //        const int nelem = 5*i+1; // num of hexes in x y and z
-        const int nelem = simuGap << i; // num of hexes in x y and z
-        std::cout << "---------- START OF SIMULATION WITH NELEM = " << nelem << " ------------" << std::endl;
-        std::cout << "Creating gmesh and cmesh..." << std::endl;
-        if (convergenceMesh){
-            const int matid = 1;
-            TPZManVector<int,6> BCids(6,-1); // ids of the bcs
-            academic.SetBCIDVector(BCids);
-            academic.SetMaterialId(matid);
-            academic.SetNumberElements(nelem);
-            if (runtype != ETetrahedra) {
-                gmesh = academic.PyramidalAndTetrahedralMesh();
-            }
-            else
-            {
-                gmesh = academic.TetrahedralMesh();
-            }
-        }
-        else{
-            //    TPZGeoMesh *gmesh = CreateGeoMesh1Pir();
-            //    TPZGeoMesh *gmesh = CreateGeoMeshHexaOfPir();
-            gmesh = CreateGeoMeshHexaOfPirTetra();
-            //    TPZGeoMesh *gmesh = CreateGeoMesh1Tet();
-            //    TPZGeoMesh *gmesh = CreateGeoMeshPrism();
-        }
-        
-        // ------------------ Refining -------------------
-        int nref = 0;
-        UniformRefine(gmesh, nref);
-        
-        // ------------------ Generating VTK with GMesh -------------------
-        {
-            std::string geoMeshName = "../PyramidGMeshBefore.vtk";
-            std::ofstream outPara(geoMeshName);
-            TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
-        }
-        // ------------------ Dividing pyramids in tets -------------------
-        if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder ||
-           runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
-        {
-            DividePyramids(*gmesh);
-            DivideBoundaryElements(*gmesh);
-        }
-        
-        // ------------------ Generating VTK with GMesh -------------------
-        {
-              std::string geoMeshName = "../PyramidGMesh.vtk";
-              std::ofstream outPara(geoMeshName);
-              TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
-        }
-        
-        // ------------------ Nothing for now -------------------
-        if (runtype == ETetrahedra || runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
-        {
-            // the order of the elements can be increased
-        }
-        
-#ifdef LOG4CXX
-        if(logger->isDebugEnabled())
-        {
-            std::stringstream sout;
-            gmesh->Print(sout);
-            LOGPZ_DEBUG(logger, sout.str())
-        }
-#endif
-        
-        // ------------------ Create Cmesh of pressure and flux -------------------
         TPZManVector<TPZCompMesh*,2> meshvec(2);
-        meshvec[1] = CreateCmeshPressure(gmesh, pPressure, HDivMaisMais);
-        LoadSolution(meshvec[1]);
-        meshvec[0] = CreateCmeshFlux(gmesh, pFlux,HDivMaisMais);
+        int p_order = sim_control->m_approx_order;
+        int hdiv_pp_Q = sim_control->m_Hdiv_plusplus_Q;
+        
+        /// Construction for Hdiv (velocity) approximation space
+        meshvec[0] = CreateCmeshFlux(gmesh, p_order,hdiv_pp_Q);
         TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
+
+        /// Construction for L2 (pressure) approximation space
+        meshvec[1] = CreateCmeshPressure(gmesh, p_order, hdiv_pp_Q);
+        LoadSolution(meshvec[1]);
         
-        if (runtype == EDividedPyramidIncreasedOrder || runtype == EDividedPyramidIncreasedOrder4)
+        if (sim_control->m_run_type == EDividedPyramidIncreasedOrder || sim_control->m_run_type == EDividedPyramidIncreasedOrder4)
         {
-            IncreasePyramidSonOrder(meshvec,pFlux);
+            IncreasePyramidSonOrder(meshvec,p_order);
         }
-        
-        //ProjectFlux(meshvec[0]);
         
 #ifdef LOG4CXX
         if (logger->isDebugEnabled())
@@ -522,9 +336,7 @@ int ComputeApproximation(int argc, char *argv[])
         // ------------------ Create CMesh multiphysics -------------------
         TPZCompMesh *cmeshMult = CreateCmeshMulti(meshvec);
         TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, cmeshMult);
-        /// created condensed elements for the elements that have internal nodes
-        bool keeplagrangian = true;
-        TPZCompMeshTools::CreatedCondensedElements(cmeshMult, keeplagrangian);
+        TPZCompMeshTools::CreatedCondensedElements(cmeshMult, keep_lagrangian_multiplier_Q);
         
         //GroupElements(cmeshMult);
 #ifdef LOG4CXX
@@ -540,20 +352,24 @@ int ComputeApproximation(int argc, char *argv[])
             cmeshMult->Print(sout);
         }
         cmeshMult->CleanUpUnconnectedNodes();
-        
-        bool shouldrenumber = true;
+
         
         // ------------------ Creating Analysis object -------------------
-        TPZAnalysis an(cmeshMult,shouldrenumber);
+        TPZAnalysis an(cmeshMult,should_renumber_Q);
         TPZStepSolver<STATE> step;
         step.SetDirect(ELDLt);
-        TPZSkylineStructMatrix skyl(cmeshMult);
-        skyl.SetNumThreads(nthreadForAssemble);
-        TPZSymetricSpStructMatrix sparse(cmeshMult);
-        sparse.SetNumThreads(nthreadForAssemble);
-        //    TPZFStructMatrix skyl(cmeshMult);
-        an.SetStructuralMatrix(sparse);
-        an.SetSolver(step);
+        
+        if (use_pardiso_Q) {
+            TPZSymetricSpStructMatrix sparse(cmeshMult);
+            sparse.SetNumThreads(n_threads_assembly);
+            an.SetStructuralMatrix(sparse);
+            an.SetSolver(step);
+        }else{
+            TPZSkylineStructMatrix skyl(cmeshMult);
+            skyl.SetNumThreads(n_threads_assembly);
+            an.SetStructuralMatrix(skyl);
+            an.SetSolver(step);
+        }
         
         std::cout << "Starting assemble..." << std::endl;
         std::cout << "Nequations = " << cmeshMult->NEquations() << std::endl;
@@ -575,44 +391,24 @@ int ComputeApproximation(int argc, char *argv[])
             std::ofstream outmat("../mat.nb");
             mat->Print("stiff=",outmat,EMathematicaInput);
         }
-        //      TPZFMatrix<STATE> solution = cmeshMult->Solution();
-        //      {
-        //          std::ofstream sol("../SolInterpolate.txt");
-        //          sol << "Solution obtained by interpolation\n";
-        //          an.PrintVectorByElement(sol, solution,1.e-8);
-        //      }
-        //      TPZFMatrix<STATE> rhs;
-        //      solution.Resize(cmeshMult->NEquations(), 1);
-        //      mat->Multiply(solution, rhs);
-        //      {
-        //          std::ofstream theory("../RhsbyMult.txt");
-        //          theory << "Rhs obtained by matrix vector multiply\n";
-        //          an.PrintVectorByElement(theory, rhs,1.e-8);
-        //      }
-        //      {
-        //          std::ofstream practice("../RhsComputed.txt");
-        //          practice << "Rhs obtained by assembly process\n";
-        //          an.PrintVectorByElement(practice, an.Rhs(),1.e-8);
-        //      }
         
         std::cout << "Starting Solve..." << std::endl;
-        
 #ifdef USING_BOOST
         boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
-        // ------------------ Solving -------------------
         an.Solve();
+        
 #ifdef USING_BOOST
         boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
         std::cout << "Total wall time of Solve = " << tsolve2 - tsolve1 << " s" << std::endl;
 #endif
         
-        if(0)
-        {
-            std::ofstream sol("../SolComputed.txt");
-            sol << "Solution obtained by matrix inversion\n";
-            an.PrintVectorByElement(sol, cmeshMult->Solution(),1.e-8);
-        }
+//        if(0)
+//        {
+//            std::ofstream sol("../SolComputed.txt");
+//            sol << "Solution obtained by matrix inversion\n";
+//            an.PrintVectorByElement(sol, cmeshMult->Solution(),1.e-8);
+//        }
         
         std::cout << "Solved!" << std::endl;
         
@@ -636,27 +432,27 @@ int ComputeApproximation(int argc, char *argv[])
 #endif
         out << "Nequations = " << cmeshMult->NEquations() << std::endl;
         out << "Nequations before condensation = " << cmeshMult->Solution().Rows() << std::endl;
-        out << "Flux order " << pFlux << std::endl;
+        out << "Flux order " << p_order << std::endl;
         out << "NElements in each direction " << nelem << std::endl;
-        if (runtype == ETetrahedra) {
+        if (sim_control->m_run_type == ETetrahedra) {
             out << "Using tetrahedral elements\n";
         }
-        else if (runtype == EPyramid) {
+        else if (sim_control->m_run_type == EPyramid) {
             out << "Using pyramid elements\n";
         }
-        else if(runtype == EDividedPyramid)
+        else if(sim_control->m_run_type == EDividedPyramid)
         {
             out << "Using pyramid divided by tetraedra and nonconforming restraints\n";
         }
-        else if(runtype == EDividedPyramidIncreasedOrder)
+        else if(sim_control->m_run_type == EDividedPyramidIncreasedOrder)
         {
             out << "Using pyramid divided by tetraedra and conforming restraints\n";
         }
-        else if(runtype == EDividedPyramid4)
+        else if(sim_control->m_run_type == EDividedPyramid4)
         {
             out << "Using pyramid divided by 4 tetraedra and nonconforming restraints\n";
         }
-        else if(runtype == EDividedPyramidIncreasedOrder4)
+        else if(sim_control->m_run_type == EDividedPyramidIncreasedOrder4)
         {
             out << "Using pyramid divided by 4 tetraedra and conforming restraints\n";
         }
@@ -669,7 +465,7 @@ int ComputeApproximation(int argc, char *argv[])
         std::cout << "Calculating error..." << std::endl;
         an.SetExact(ExactNathan);
         TPZManVector<REAL,3> errors(3,1);
-        an.SetThreadsForError(nthreadsForError);
+        an.SetThreadsForError(n_threads_error);
 #ifdef USING_BOOST
         boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -688,9 +484,8 @@ int ComputeApproximation(int argc, char *argv[])
         h1ErrVec[i] = errors[0];
         l2ErrVec[i] = errors[1];
         semih1ErrVec[i] = errors[2];
-        hSizeVec[i] = 1./REAL(nelem);
+        hSizeVec[i] = 1./REAL(n_elements);
         
-        std::cout << "\n**** Simulation with nelem " << nelem << " finished! ****" << std::endl;
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim2 = boost::posix_time::microsec_clock::local_time();
         std::cout << "Total wall time of simulation = " << tsim2 - tsim1 << " s" << std::endl;
@@ -731,6 +526,71 @@ int ComputeApproximation(int argc, char *argv[])
     
     
 }
+
+TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
+    
+    // ------------------ Creating GeoMesh -------------------
+    TPZGeoMesh gmesh = new TPZGeoMesh;
+    
+    const int nelem = sim_control->m_n_elements; // num of hexes in x y and z
+    std::cout << "Creating geometry description." << std::endl;
+    
+    const int matid = 1;
+    TPZManVector<int,6> BCids(6,-1); // ids of the bcs
+    academic.SetBCIDVector(BCids);
+    academic.SetMaterialId(matid);
+    academic.SetNumberElements(nelem);
+    if (runtype != ETetrahedra) {
+        gmesh = academic.PyramidalAndTetrahedralMesh();
+    }
+    else
+    {
+        gmesh = academic.TetrahedralMesh();
+    }
+    
+    // ------------------ Refining -------------------
+    int nref = 0;
+    UniformRefine(gmesh, nref);
+    
+    // ------------------ Generating VTK with GMesh -------------------
+    {
+        std::string geoMeshName = "gmesh_pyramid_b.vtk";
+        std::ofstream outPara(geoMeshName);
+        TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
+    }
+    // ------------------ Dividing pyramids in tets -------------------
+    if(runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder ||
+       runtype == EDividedPyramid4 || runtype == EDividedPyramidIncreasedOrder4)
+    {
+        DividePyramids(*gmesh);
+        DivideBoundaryElements(*gmesh);
+    }
+    
+    // ------------------ Generating VTK with GMesh -------------------
+    {
+        std::string geoMeshName = "gmesh_pyramid.vtk";
+        std::ofstream outPara(geoMeshName);
+        TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
+    }
+    
+//    // ------------------ Nothing for now -------------------
+//    if (runtype == ETetrahedra || runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
+//    {
+//        // the order of the elements can be increased
+//    }
+    
+#ifdef LOG4CXX
+    if(logger->isDebugEnabled())
+    {
+        std::stringstream sout;
+        gmesh->Print(sout);
+        LOGPZ_DEBUG(logger, sout.str())
+    }
+#endif
+ 
+    return gmesh;
+}
+
 
 void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm);
 
@@ -1374,6 +1234,7 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, int p, bool hdivmm)
         else
         {
             TPZCompEl *cel = new TPZIntelGen<TPZShapePiramHdiv>(*cmesh,gel,index);
+            DebugStop();
         }
         gel->ResetReference();
     }
