@@ -291,13 +291,13 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     //   gRefDBase.InitializeAllUniformRefPatterns();
 
-    TPZManVector<REAL,20> neqVec(n_simulations,0.);
-    TPZManVector<REAL,20> hSizeVec(n_simulations,0.);
-    TPZManVector<REAL,20> h1ErrVec(n_simulations,0.);
-    TPZManVector<REAL,20> l2ErrVec(n_simulations,0.);
-    TPZManVector<REAL,20> semih1ErrVec(n_simulations,0.);
+    TPZManVector<REAL,20> neqVec(n_simulations+1,0.);
+    TPZManVector<REAL,20> hSizeVec(n_simulations+1,0.);
+    TPZManVector<REAL,20> h1ErrVec(n_simulations+1,0.);
+    TPZManVector<REAL,20> l2ErrVec(n_simulations+1,0.);
+    TPZManVector<REAL,20> semih1ErrVec(n_simulations+1,0.);
     
-    for (int i = 0 ; i < n_simulations ; i++){
+    for (int i = 0 ; i <= n_simulations ; i++){
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -1228,7 +1228,7 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, int p, bool hdivmm)
         }
         else
         {
-            TPZCompEl *cel = new TPZIntelGen<TPZShapePiramHdiv>(*cmesh,gel,index);
+            new TPZIntelGen<TPZShapePiramHdiv>(*cmesh,gel,index);
             DebugStop();
         }
         gel->ResetReference();
