@@ -12,7 +12,7 @@ TSimulationControl::TSimulationControl(){
     
     m_run_type          = ETetrahedra;
     m_geometry_type     = EAcademic;
-    m_h_levels          = 0;
+    m_h_levels          = 2;
     m_n_elements        = 1;
     m_cartesian_stride  = 1;
     m_approx_order      = 1;

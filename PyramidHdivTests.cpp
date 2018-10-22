@@ -107,7 +107,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility();
 
-void ExactNathan(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol){
+void Exact(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol){
     
     // Linear one
     //    sol[0] = pt[0];
@@ -142,7 +142,7 @@ int gIntegrationOrder = 4;
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &f) {
     
     TPZFNMatrix<3,STATE> dsol(3,1);
-    ExactNathan(pt, f, dsol);
+    Exact(pt, f, dsol);
     return;
     
     f[0] = pt[0]*pt[0];
@@ -218,6 +218,18 @@ int ComputeApproximation(TSimulationControl * sim_control);
 
 TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control);
 
+int integer_power(int base, unsigned int exp){
+    
+    if (exp == 0)
+        return 1;
+    int temp = integer_power(base, exp/2);
+    if (exp%2 == 0)
+        return temp*temp;
+    else
+        return base*temp*temp;
+    
+}
+
 int main(int argc, char *argv[])
 {
     /// Global controls
@@ -261,7 +273,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
     EApproxSpace run_type = sim_control->m_run_type;
     int p_order = sim_control->m_approx_order;
     int hdiv_pp_Q = sim_control->m_Hdiv_plusplus_Q;
-    int n_elements = sim_control->m_n_elements;
     int n_simulations  = sim_control->m_h_levels;
     const int dim = 3;
     
@@ -301,6 +312,9 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
+        
+        sim_control->m_n_elements = integer_power(2,i);
+        int n_elements = sim_control->m_n_elements;
         gmesh = GeometryConstruction(sim_control);
         
         TPZManVector<TPZCompMesh*,2> meshvec(2);
@@ -405,7 +419,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         TPZStack<std::string> scalnames, vecnames;
         scalnames.Push("Pressure");
         vecnames.Push("Flux");
-        std::string plotfile = "../Pyramid_Solution.vtk";
+        std::string plotfile = "Pyramid_Solution.vtk";
         an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
         
         int postprocessresolution = 2;
@@ -413,7 +427,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         
         
         // ------------------ Doing error PostProc -------------------
-        std::ofstream out("../errosPyrMeshSin.txt",std::ios::app);
+        std::ofstream out("errosPyrMeshSin.txt",std::ios::app);
         out << "\n\n ------------ NEW SIMULATION -----------" << std::endl;
 #ifdef PZDEBUG
         out << "Debug Run\n";
@@ -451,7 +465,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         
         
         std::cout << "Calculating error..." << std::endl;
-        an.SetExact(ExactNathan);
+        an.SetExact(Exact);
         TPZManVector<REAL,3> errors(3,1);
         an.SetThreadsForError(n_threads_error);
 #ifdef USING_BOOST
@@ -465,6 +479,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         out << "Norma pressao e fluxo = " << errors[0] << std::endl;
         out << "Norma L2 pressao = " << errors[1] << std::endl;
         out << "Norma L2 fluxo = " << errors[2] << std::endl;
+        
 #ifdef USING_BOOST
         std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " s" << std::endl;
 #endif
@@ -505,14 +520,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
     }
     Mathsout << ".nb";
     mathematicaFilename = Mathsout.str();
-    
     GenerateMathematicaWithConvergenceRates(neqVec,hSizeVec,h1ErrVec,l2ErrVec,semih1ErrVec,run_type,sim_control->m_approx_order,sim_control->m_Hdiv_plusplus_Q);
     
     std::cout << "Code finished! file " << mathematicaFilename << " written" << std::endl;
     
     return 0;
-    
-    
+
 }
 
 TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
