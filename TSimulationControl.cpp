@@ -10,7 +10,7 @@
 
 TSimulationControl::TSimulationControl(){
     
-    m_run_type          = EDividedPyramid;
+    m_run_type          = EDividedPyramid4;
     m_geometry_type     = EVerticalWellbore;
     m_h_levels          = 0;
     m_n_elements        = 1;

@@ -373,7 +373,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         
         /// Construction for Hdiv (velocity) approximation space
         meshvec[0] = CreateCmeshFlux(gmesh, sim_control);
-        TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
+//        TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
 
         /// Construction for L2 (pressure) approximation space
         meshvec[1] = CreateCmeshPressure(gmesh, sim_control);
@@ -673,7 +673,7 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
         LOGPZ_DEBUG(logger, sout.str())
     }
 #endif
- 
+    gmesh->BuildConnectivity();
     return gmesh;
 }
 
@@ -2510,44 +2510,46 @@ void DividePyramids(TPZGeoMesh &gmesh)
         if (!gel || gel->Type() != EPiramide || gel->HasSubElement()) {
             continue;
         }
-        // an element on the quadrilateral face
-        TPZGeoElSide gelside(gel,13);
-        // look for an element divided along the quadrilateral side
-        TPZGeoElSide neighbour = gelside.Neighbour();
-        bool hasdividedneighbour = false;
-        bool hasvolumeneighbour = false;
-        while (neighbour != gelside) {
-            if (neighbour.Element()->HasSubElement()) {
-                hasdividedneighbour = true;
-            }
-            if(neighbour.Element()->Dimension() == meshdim)
-            {
-                hasvolumeneighbour = true;
-            }
-            neighbour = neighbour.Neighbour();
-        }
-        if (hasdividedneighbour == true)
-        {
-            // find compatible refinement pattern
-            TPZAutoPointer<TPZRefPattern> compatible;
-            std::list<TPZAutoPointer<TPZRefPattern> > patlist;
-            TPZRefPatternTools::GetCompatibleRefPatterns(gel, patlist);
-            if (patlist.size() != 1) {
-                DebugStop();
-            }
-            compatible = *patlist.begin();
-            gel->SetRefPattern(compatible);
-        }
-        else
-        {
-            if(hasvolumeneighbour)
-            {
-                TPZGeoElBC(gelside, 3);
-            }
-            gel->SetRefPattern(refpat);
-        }
+//        // an element on the quadrilateral face
+//        int quadrilateral_side = 13;
+//        TPZGeoElSide gelside(gel,quadrilateral_side);
+//        // look for an element divided along the quadrilateral side
+//        TPZGeoElSide neighbour = gelside.Neighbour();
+//        bool hasdividedneighbour = false;
+//        bool hasvolumeneighbour = false;
+//        while (neighbour != gelside) {
+//            if (neighbour.Element()->HasSubElement()) {
+//                hasdividedneighbour = true;
+//            }
+//            if(neighbour.Element()->Dimension() == meshdim)
+//            {
+//                hasvolumeneighbour = true;
+//            }
+//            neighbour = neighbour.Neighbour();
+//        }
+//        if (hasdividedneighbour == true)
+//        {
+//            // find compatible refinement pattern
+//            TPZAutoPointer<TPZRefPattern> compatible;
+//            std::list<TPZAutoPointer<TPZRefPattern> > patlist;
+//            TPZRefPatternTools::GetCompatibleRefPatterns(gel, patlist);
+//            if (patlist.size() != 1) {
+//                DebugStop();
+//            }
+//            compatible = *patlist.begin();
+//            gel->SetRefPattern(compatible);
+//        }
+//        else
+//        {
+//            if(hasvolumeneighbour)
+//            {
+//                TPZGeoElBC(gelside, 3);
+//            }
+//            gel->SetRefPattern(refpat);
+//        }
         // Create a geometric element along the quadrilateral side
-        TPZManVector<TPZGeoEl *,2> subels(2,0);
+        TPZManVector<TPZGeoEl *,4> subels(4,0);
+        gel->SetRefPattern(refpat);
         gel->Divide(subels);
     }
     
