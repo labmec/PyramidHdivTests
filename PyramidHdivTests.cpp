@@ -268,7 +268,7 @@ int ConvergenceTest(TSimulationControl * control);
 
 int ComputeApproximation(TSimulationControl * sim_control);
 
-TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control);
+TPZGeoMesh * GeometryConstruction(int n_h_ref_level, TSimulationControl * sim_control);
 
 int integer_power(int base, unsigned int exp){
     
@@ -325,7 +325,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     EApproxSpace run_type = sim_control->m_run_type;
     int p_order = sim_control->m_approx_order;
     int hdiv_pp_Q = sim_control->m_Hdiv_plusplus_Q;
-    int n_simulations  = sim_control->m_h_levels;
+    int n_h_level  = sim_control->m_h_levels;
     const int dim = 3;
     
     /// Hard code controls
@@ -354,25 +354,27 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     //   gRefDBase.InitializeAllUniformRefPatterns();
 
-    TPZManVector<REAL,20> neqVec(n_simulations+1,0.);
-    TPZManVector<REAL,20> hSizeVec(n_simulations+1,0.);
-    TPZManVector<REAL,20> h1ErrVec(n_simulations+1,0.);
-    TPZManVector<REAL,20> l2ErrVec(n_simulations+1,0.);
-    TPZManVector<REAL,20> semih1ErrVec(n_simulations+1,0.);
+    TPZManVector<REAL,20> neqVec(n_h_level+1,0.);
+    TPZManVector<REAL,20> hSizeVec(n_h_level+1,0.);
+    TPZManVector<REAL,20> h1ErrVec(n_h_level+1,0.);
+    TPZManVector<REAL,20> l2ErrVec(n_h_level+1,0.);
+    TPZManVector<REAL,20> semih1ErrVec(n_h_level+1,0.);
     
-    for (int i = 0 ; i <= n_simulations ; i++){
+    for (int i = 0 ; i <= n_h_level ; i++){
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
-        
-        sim_control->m_n_elements = integer_power(2,i);
-        int n_elements = sim_control->m_n_elements;
-        gmesh = GeometryConstruction(sim_control);
+        int n_elements = integer_power(2,i);
+        gmesh = GeometryConstruction(i,sim_control);
         
         TPZManVector<TPZCompMesh*,2> meshvec(2);
         
         /// Construction for Hdiv (velocity) approximation space
         meshvec[0] = CreateCmeshFlux(gmesh, sim_control);
+        {
+            std::ofstream flux_file("flux_cmesh.txt");
+            meshvec[0]->Print(flux_file);
+        }
 //        TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
 
         /// Construction for L2 (pressure) approximation space
@@ -580,17 +582,18 @@ int ComputeApproximation(TSimulationControl * sim_control)
 
 }
 
-TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
+TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_control){
     
     // ------------------ Creating GeoMesh -------------------
     TPZGeoMesh * gmesh = new TPZGeoMesh;
     EApproxSpace run_type = sim_control->m_run_type;
     
-    const int nelem = sim_control->m_n_elements; // num of hexes in x y and z
     std::cout << "Creating geometry description." << std::endl;
     
     switch (sim_control->m_geometry_type) {
         case EAcademic:{
+
+            const int n_elements = integer_power(2,h_ref_level); // num of hexes in x y and z
             const int matid = 1;
             /// Defining the type o geometry
             TPZAcademicGeoMesh academic;
@@ -601,7 +604,7 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
             TPZManVector<int,6> BCids(6,-1); // ids of the bcs
             academic.SetBCIDVector(BCids);
             academic.SetMaterialId(matid);
-            academic.SetNumberElements(nelem);
+            academic.SetNumberElements(n_elements);
             if (run_type != ETetrahedra) {
                 gmesh = academic.PyramidalAndTetrahedralMesh();
             }
@@ -620,6 +623,9 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
 //            std::string gmsh_file("vertical_wellbore_He.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
+            // ------------------ Uniform Refining -------------------
+            UniformRefine(gmesh, h_ref_level);
+            
 #ifdef PZDEBUG
             if (!gmesh)
             {
@@ -634,16 +640,15 @@ TPZGeoMesh * GeometryConstruction(TSimulationControl * sim_control){
             break;
     }
     
-    // ------------------ Refining -------------------
-    int nref = 0;
-    UniformRefine(gmesh, nref);
-    
     // ------------------ Generating VTK with GMesh -------------------
     {
         std::string geoMeshName = "gmesh_pyramid_b.vtk";
         std::ofstream outPara(geoMeshName);
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
     }
+    
+
+    
     // ------------------ Dividing pyramids in tets -------------------
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
        run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
