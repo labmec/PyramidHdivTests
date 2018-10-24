@@ -39,8 +39,8 @@ public:
     /// Number of elements in x, y and z
     int m_n_elements;
     
-    /// Stride size to define where the refine patterns are applied
-    int m_cartesian_stride;
+    /// Directive to create a red black mixed mesh (red pyramids, black hexahedra)
+    bool m_red_black_stride_Q;
     
     /// Polynomial approximation order
     int m_approx_order;
