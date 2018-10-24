@@ -113,38 +113,49 @@ void VerifyDRhamCompatibility(TSimulationControl * control);
 //#define Solution_Sine
 //#define Solution_TriQuadratic
 #define Solution_MonoQuadratic
+//#define Solution_MonoLinear
 //#define Solution_Dupuit_Thiem
 
-void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu){
+void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
-    gradu.Resize(4, 1);
+    flux_and_f.Resize(4, 1);
 #ifdef Solution_Sine
     // Sine problem
     u[0] = sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    gradu(0,0) = M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    gradu(1,0) = M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
-    gradu(2,0) = M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
-    gradu(3,0) = 3*pow(M_PI,2)*sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+    flux_and_f(0,0) = M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+    flux_and_f(1,0) = M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
+    flux_and_f(2,0) = M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
+    flux_and_f(3,0) = 3*pow(M_PI,2)*sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
     return;
 #endif
 
 #ifdef Solution_Sine
     // x^2 + y^2 + z^2
     u[0] = pt[0]*pt[0] + pt[1]*pt[1] + pt[2]*pt[2];
-    gradu(0,0) = 2*pt[0];
-    gradu(1,0) = 2*pt[1];
-    gradu(2,0) = 2*pt[2];
-    gradu(3,0) = -6.0;
+    flux_and_f(0,0) = -2*pt[0];
+    flux_and_f(1,0) = -2*pt[1];
+    flux_and_f(2,0) = -2*pt[2];
+    flux_and_f(3,0) = -6.0;
     return;
 #endif
     
 #ifdef Solution_MonoQuadratic
     // x^2 only
     u[0] = pt[0]*pt[0];
-    gradu(0,0) = 2*pt[0];
-    gradu(1,0) = 0.;
-    gradu(2,0) = 0.;
-    gradu(3,0) = -2.0;
+    flux_and_f(0,0) = -2*pt[0];
+    flux_and_f(1,0) = 0.;
+    flux_and_f(2,0) = 0.;
+    flux_and_f(3,0) = -2.0;
+    return;
+#endif
+    
+#ifdef Solution_MonoLinear
+    // x only
+    u[0] = pt[0];
+    flux_and_f(0,0) = -1.0;
+    flux_and_f(1,0) = 0.;
+    flux_and_f(2,0) = 0.;
+    flux_and_f(3,0) = 0.0;
     return;
 #endif
     
@@ -189,17 +200,17 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &gradu
 int gIntegrationOrder = 5;
 
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
-    TPZFMatrix<STATE> gradu;
-    Analytic(pt, u, gradu);
+    TPZFMatrix<STATE> flux_and_f;
+    Analytic(pt, u, flux_and_f);
     return;
 }
 
 
 void BodyForcing(const TPZVec<REAL> &pt, TPZVec<STATE> &f) {
     TPZVec<STATE> u(1);
-    TPZFMatrix<STATE> gradu;
-    Analytic(pt, u, gradu);
-    f[0]= gradu(3,0);
+    TPZFMatrix<STATE> flux_and_f;
+    Analytic(pt, u, flux_and_f);
+    f[0]= flux_and_f(3,0);
     return;
 }
 
@@ -316,8 +327,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = false;
-    const int n_threads_error = 0;
-    const int n_threads_assembly = 0;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     TPZGeoMesh *gmesh = NULL;
     
@@ -337,7 +348,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     TPZManVector<REAL,20> l2ErrVec(n_h_level+1,0.);
     TPZManVector<REAL,20> semih1ErrVec(n_h_level+1,0.);
     
-    for (int i = 1 ; i <= n_h_level ; i++){
+    for (int i = 0 ; i <= n_h_level ; i++){
 #ifdef USING_BOOST
         boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -361,13 +372,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             std::ofstream pressure_file("pressure_cmesh.txt");
             meshvec[1]->Print(pressure_file);
         }
-
 //        LoadSolution(meshvec[1]);
         
-        if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
-        {
-            IncreasePyramidSonOrder(meshvec,p_order);
-        }
+//        if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
+//        {
+//            IncreasePyramidSonOrder(meshvec,p_order);
+//        }
         
 #ifdef LOG4CXX
         if (logger->isDebugEnabled())
@@ -432,12 +442,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
         
         std::cout << "Assembled!" << std::endl;
-        
-//        if(0){
-//            std::ofstream outmat("../mat.nb");
-//            mat->Print("stiff=",outmat,EMathematicaInput);
-//        }
-        
+    
         std::cout << "Starting Solve..." << std::endl;
 #ifdef USING_BOOST
         boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
@@ -451,7 +456,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
         UnwrapMesh(cmeshMult);
         an.LoadSolution();
         cmeshMult->Solution() *= -1.0; // Because the material is expressed in residuals terms
-        an.LoadSolution(cmeshMult->Solution());
         TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
         
         std::cout << "Solved!" << std::endl;
@@ -1299,33 +1303,35 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * contro
     cmesh->SetDefaultOrder(p);
     cmesh->ApproxSpace().SetAllCreateFunctionsContinuous();
     cmesh->ApproxSpace().CreateDisconnectedElements(true);
-    
     TPZDualPoisson * mymat = new TPZDualPoisson(matid);
 //    TPZMixedPoisson *mymat = new TPZMixedPoisson(matid, dim);
     cmesh->InsertMaterialObject(mymat);
     
-    const int64_t nel = gmesh->NElements();
-    int64_t index;
-    for (int64_t iel = 0; iel < nel; iel++) {
-        TPZGeoEl *gel = gmesh->Element(iel);
-        if(gel->HasSubElement())
-        {
-            continue;
-        }
-        if (!gel || gel->Type() != EPiramide){
-            int64_t index;
-            if (gel->Dimension() == gmesh->Dimension()) {
-                cmesh->ApproxSpace().CreateCompEl(gel, *cmesh, index);
-            }
-        }
-        else
-        {
-            new TPZIntelGen<TPZShapePiramHdiv>(*cmesh,gel,index);
-            DebugStop();
-        }
-        gel->ResetReference();
-    }
-    cmesh->ExpandSolution();
+//    const int64_t nel = gmesh->NElements();
+//    int64_t index;
+//    for (int64_t iel = 0; iel < nel; iel++) {
+//        TPZGeoEl *gel = gmesh->Element(iel);
+//        if(gel->HasSubElement())
+//        {
+//            continue;
+//        }
+//        if (!gel || gel->Type() != EPiramide){
+//            int64_t index;
+//            if (gel->Dimension() == gmesh->Dimension()) {
+//                cmesh->ApproxSpace().CreateCompEl(gel, *cmesh, index);
+//            }
+//        }
+//        else
+//        {
+//            new TPZIntelGen<TPZShapePiramHdiv>(*cmesh,gel,index);
+//            DebugStop();
+//        }
+//        gel->ResetReference();
+//    }
+//    cmesh->ExpandSolution();
+    
+    cmesh->AutoBuild();
+    
     int64_t ncon = cmesh->NConnects();
     for (int64_t ic=0; ic<ncon; ic++) {
         cmesh->ConnectVec()[ic].SetLagrangeMultiplier(1);
@@ -1460,17 +1466,12 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
     const int int_p_order = 5;
     //Creating computational mesh for multiphysic elements
     TPZGeoMesh *gmesh = meshvec[0]->Reference();
-    gmesh->ResetReference();
+    int dim = gmesh->Dimension();
     TPZCompMesh *mphysics = new TPZCompMesh(gmesh);
     
     int p1 = meshvec[0]->GetDefaultOrder();
     int p2 = meshvec[1]->GetDefaultOrder();
     int p = p1 < p2 ? p2 : p1;
-    mphysics->SetDefaultOrder(p);
-    //criando material
-    int dim = gmesh->Dimension();
-    mphysics->SetDimModel(dim);
-    
     
     switch (control->m_geometry_type) {
         case EAcademic:
@@ -1511,7 +1512,8 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
         case EVerticalWellbore:
         {
             const int matid = 1;
-            TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
+            TPZDualPoisson * mat = new TPZDualPoisson(matid);
+//            TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
             mphysics->InsertMaterialObject(mat);
             
             int bc_outer_id = 2;
@@ -1542,26 +1544,13 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
             break;
     }
     
+    mphysics->SetDefaultOrder(p);
+    mphysics->SetDimModel(dim);
     mphysics->SetAllCreateFunctionsMultiphysicElem();
-    
-    //Fazendo auto build
     mphysics->AutoBuild();
-    mphysics->AdjustBoundaryElements();
-    mphysics->CleanUpUnconnectedNodes();
-    
-    //Creating multiphysic elements containing skeletal elements.
     TPZBuildMultiphysicsMesh::AddElements(meshvec, mphysics);
-    mphysics->Reference()->ResetReference();
-    mphysics->LoadReferences();
-    
-    
-    meshvec[0]->CleanUpUnconnectedNodes();
-    TPZBuildMultiphysicsMesh::AddConnects(meshvec,mphysics);
-    
-    
+    TPZBuildMultiphysicsMesh::AddConnects(meshvec, mphysics);
     TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, mphysics);
-    
-    mphysics->ExpandSolution();
     
     
 #ifdef LOG4CXX

@@ -10,11 +10,11 @@
 
 TSimulationControl::TSimulationControl(){
     
-    m_run_type          = ETetrahedra;
+    m_run_type          = EDividedPyramid4;
     m_geometry_type     = EAcademic;
-    m_h_levels          = 1;
+    m_h_levels          = 2;
     m_n_elements        = 1;
-    m_red_black_stride_Q  = false;
+    m_red_black_stride_Q  = true;
     m_approx_order      = 1;
     m_Hdiv_plusplus_Q   = false;
     
