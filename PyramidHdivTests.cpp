@@ -106,13 +106,14 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
 
 void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 
-
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-//#define Solution_Sine
+#define Solution_Sine
+//#define Solution_MonoFourthOrder
+//#define Solution_MonoCubic
 //#define Solution_TriQuadratic
-#define Solution_MonoQuadratic
+//#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
 //#define Solution_Dupuit_Thiem
 
@@ -122,14 +123,34 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
 #ifdef Solution_Sine
     // Sine problem
     u[0] = sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    flux_and_f(0,0) = M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    flux_and_f(1,0) = M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
-    flux_and_f(2,0) = M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
+    flux_and_f(0,0) = -M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+    flux_and_f(1,0) = -M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
+    flux_and_f(2,0) = -M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
     flux_and_f(3,0) = 3*pow(M_PI,2)*sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
     return;
 #endif
+    
+#ifdef Solution_MonoFourthOrder
+    // x^4
+    u[0] = pt[0]*pt[0]*pt[0]*pt[0];
+    flux_and_f(0,0) = -4*pt[0]*pt[0]*pt[0];
+    flux_and_f(1,0) = 0.0;
+    flux_and_f(2,0) = 0.0;
+    flux_and_f(3,0) = -12.0*pt[0]*pt[0];
+    return;
+#endif
+    
+#ifdef Solution_MonoCubic
+    // x^3
+    u[0] = pt[0]*pt[0]*pt[0];
+    flux_and_f(0,0) = -3*pt[0]*pt[0];
+    flux_and_f(1,0) = 0.0;
+    flux_and_f(2,0) = 0.0;
+    flux_and_f(3,0) = -6.0*pt[0];
+    return;
+#endif
 
-#ifdef Solution_Sine
+#ifdef Solution_TriQuadratic
     // x^2 + y^2 + z^2
     u[0] = pt[0]*pt[0] + pt[1]*pt[1] + pt[2]*pt[2];
     flux_and_f(0,0) = -2*pt[0];
@@ -361,7 +382,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         /// Construction for Hdiv (velocity) approximation space
         meshvec[0] = CreateCmeshFlux(gmesh, sim_control);
         {
-            std::ofstream flux_file("flux_cmesh.txt");
+            std::ofstream flux_file("flux_cmesh_b.txt");
             meshvec[0]->Print(flux_file);
         }
 //        TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
@@ -369,15 +390,23 @@ int ComputeApproximation(TSimulationControl * sim_control)
         /// Construction for L2 (pressure) approximation space
         meshvec[1] = CreateCmeshPressure(gmesh, sim_control);
         {
-            std::ofstream pressure_file("pressure_cmesh.txt");
+            std::ofstream pressure_file("pressure_cmesh_b.txt");
             meshvec[1]->Print(pressure_file);
         }
 //        LoadSolution(meshvec[1]);
         
-//        if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
-//        {
-//            IncreasePyramidSonOrder(meshvec,p_order);
-//        }
+        if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
+        {
+            IncreasePyramidSonOrder(meshvec,p_order);
+        }
+    
+        {
+            std::ofstream flux_file("flux_cmesh.txt");
+            meshvec[0]->Print(flux_file);
+            
+            std::ofstream pressure_file("pressure_cmesh.txt");
+            meshvec[1]->Print(pressure_file);
+        }
         
 #ifdef LOG4CXX
         if (logger->isDebugEnabled())
@@ -455,7 +484,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
         UnwrapMesh(cmeshMult);
         an.LoadSolution();
-        cmeshMult->Solution() *= -1.0; // Because the material is expressed in residuals terms
+        cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
         TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
         
         std::cout << "Solved!" << std::endl;
@@ -526,6 +555,10 @@ int ComputeApproximation(TSimulationControl * sim_control)
         out << "Norma pressao e fluxo = " << errors[0] << std::endl;
         out << "Norma L2 pressao = " << errors[1] << std::endl;
         out << "Norma L2 fluxo = " << errors[2] << std::endl;
+        
+//        error_primal    = globalerror[0];
+//        error_dual      = globalerror[1];
+//        error_hdiv      = globalerror[2];
         
 #ifdef USING_BOOST
         std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " s" << std::endl;
@@ -2850,7 +2883,7 @@ void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> 
     "AxesLabel -> {Style[\"h\", myAxesSize, Black],Style[Err, myAxesSize, Black]}," <<
     "LabelStyle -> Directive[myLabelSize, Bold, Black], Joined -> True,\n" <<
     "PlotMarkers -> Automatic," <<
-    "PlotLegends -> Placed[{\"H1\", \"Flux\", \"Semi-H1\"}, {0.25, 0.85}]]" << endl;
+    "PlotLegends -> Placed[{\"Potential\", \"Flux\", \"Divergence\"}, {0.25, 0.85}]]" << endl;
     
     
     // ---------------- Calculating sloples ---------------
