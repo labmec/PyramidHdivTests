@@ -42,11 +42,14 @@ public:
     /// Directive to create a red black mixed mesh (red pyramids, black hexahedra)
     bool m_red_black_stride_Q;
     
-    /// Polynomial approximation order
-    int m_approx_order;
+    /// Maximum valure of polynomial approximation order
+    int m_p_levels;
     
     /// Directive for the use of augmented pressure accuracy
     bool m_Hdiv_plusplus_Q;
+    
+    /// Directive for the generation of vtk file
+    bool m_draw_vtk_Q;
     
 public:
     
@@ -65,7 +68,8 @@ public:
     /// Copy Constructor
     TSimulationControl & operator=(const TSimulationControl &other);
     
-    void Print();
+    /// Print object attributes
+    void Print(std::ostream &out = std::cout);
     
 };
 
