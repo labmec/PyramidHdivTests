@@ -16,10 +16,10 @@
 
 
 /// Enumerate that defines the type of approximation space
-enum EApproxSpace {ETetrahedra, EPyramid, EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4};
+enum EApproxSpace {EPyramid, EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4, ETetrahedra};
 
 /// Enumerate that defines the type of geometry type
-enum EGeometryType {EAcademic, EVerticalWellbore};
+enum EGeometryType {EAcademic, EVerticalWellHePyTe, EVerticalWellTe, EVerticalWellHe};
 
 
 // Class that defines all the simulation controls
@@ -35,9 +35,6 @@ public:
     
     /// Number of h refinements for H convergence
     int m_h_levels;
-    
-    /// Number of elements in x, y and z
-    int m_n_elements;
     
     /// Directive to create a red black mixed mesh (red pyramids, black hexahedra)
     bool m_red_black_stride_Q;

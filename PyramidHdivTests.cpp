@@ -186,7 +186,7 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     REAL x = pt[0];
     REAL y = pt[1];
     
-    gradu.Resize(4,1);
+    flux_and_f.Resize(4,1);
     
     REAL r0 = 100.0;
     REAL r = sqrt(x*x+y*y);
@@ -209,11 +209,11 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     REAL dfdr = 1.0/r;
     REAL dfdTheta = 0.0;
     
-    gradu(0,0) = -1.0*(dfdr * Radialunitx + dfdTheta * Thetaunitx);
-    gradu(1,0) = -1.0*(dfdr * Radialunity + dfdTheta * Thetaunity);
-    gradu(2,0) = -1.0*(dfdr * Radialunitz + dfdTheta * Thetaunitz);
+    flux_and_f(0,0) = -1.0*(dfdr * Radialunitx + dfdTheta * Thetaunitx);
+    flux_and_f(1,0) = -1.0*(dfdr * Radialunity + dfdTheta * Thetaunity);
+    flux_and_f(2,0) = -1.0*(dfdr * Radialunitz + dfdTheta * Thetaunitz);
     
-    gradu(3,0) = 0.0;
+    flux_and_f(3,0) = 0.0;
     return;
 #endif
     
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
 #endif
     
     TSimulationControl * sim_control = NULL;
-    if(argc != 9){
+    if(argc != 6){
         sim_control = new TSimulationControl;
     }
     else{
@@ -353,7 +353,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     /// Hard code controls
     bool should_renumber_Q = true;
-    bool use_pardiso_Q = false;
+    bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
@@ -380,7 +380,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
-        output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(5) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(15) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
+        output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(5) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(25) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
     
         for (int i = 0 ; i <= n_h_levels; i++){
             
@@ -494,7 +494,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 scalnames.Push("p");
                 scalnames.Push("div_q");
                 vecnames.Push("q");
-                std::string plotfile = "Pyramid_Solution.vtk";
+                std::string plotfile = "Approximated_Solution.vtk";
                 an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
                 
                 int postprocessresolution = 0;
@@ -531,7 +531,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
             REAL h_error = errors[2]; // div
-            output << setw(5) <<  h_level << setw(10) << n_elements << setw(10) << h << setw(15) << ndof << setw(15) << ndof_cond << setw(15) << assemble_time << setw(25) << solving_time << setw(25) << error_time << setw(25) << p_error << setw(25) << d_error  << setw(25) << h_error << endl;
+            output << setw(5) <<  h_level << setw(10) << n_elements << setw(10) << h << setw(15) << ndof << setw(15) << ndof_cond << setw(25) << assemble_time << setw(25) << solving_time << setw(25) << error_time << setw(25) << p_error << setw(25) << d_error  << setw(25) << h_error << endl;
             
             // Storage data for h convergence rates
             primal_error[i] = p_error;
@@ -653,18 +653,43 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             }
         }
             break;
-        case EVerticalWellbore:{
+        case EVerticalWellHe:{
             TPZGmshReader Geometry;
             REAL s = 1.0;
             Geometry.SetfDimensionlessL(s);
-            std::string gmsh_file("vertical_wellbore_hybrid.msh");
-//            std::string gmsh_file("vertical_wellbore_Te.msh");
-//            std::string gmsh_file("vertical_wellbore_He.msh");
+            std::string gmsh_file("vertical_wellbore_He.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
             // ------------------ Uniform Refining -------------------
             UniformRefine(gmesh, h_ref_level);
+        }
+            break;
+        case EVerticalWellTe:{
+            TPZGmshReader Geometry;
+            REAL s = 1.0;
+            Geometry.SetfDimensionlessL(s);
+            std::string gmsh_file("vertical_wellbore_Te.msh");
+            gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
+            // ------------------ Uniform Refining -------------------
+            UniformRefine(gmesh, h_ref_level);
+        }
+            break;
+        case EVerticalWellHePyTe:{
+            TPZGmshReader Geometry;
+            REAL s = 1.0;
+            Geometry.SetfDimensionlessL(s);
+            std::string gmsh_file("vertical_wellbore_hybrid.msh");
+            gmesh = Geometry.GeometricGmshMesh(gmsh_file);
+            
+            // ------------------ Uniform Refining -------------------
+            UniformRefine(gmesh, h_ref_level);
+        }
+            break;
+        default:
+            break;
+    }
+    
 #ifdef PZDEBUG
             if (!gmesh)
             {
@@ -672,21 +697,6 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
                 DebugStop();
             }
 #endif
-        }
-            break;
-            
-        default:
-            break;
-    }
-    
-    // ------------------ Generating VTK with GMesh -------------------
-    {
-        std::string geoMeshName = "gmesh_pyramid_b.vtk";
-        std::ofstream outPara(geoMeshName);
-        TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
-    }
-    
-
     
     // ------------------ Dividing pyramids in tets -------------------
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
@@ -696,18 +706,15 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
         DivideBoundaryElements(*gmesh);
     }
     
+#ifdef PZDEBUG
     // ------------------ Generating VTK with GMesh -------------------
     {
-        std::string geoMeshName = "gmesh_pyramid.vtk";
+        std::string geoMeshName = "geometry.vtk";
         std::ofstream outPara(geoMeshName);
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, outPara, true);
     }
+#endif
     
-//    // ------------------ Nothing for now -------------------
-//    if (runtype == ETetrahedra || runtype == EDividedPyramid || runtype == EDividedPyramidIncreasedOrder)
-//    {
-//        // the order of the elements can be increased
-//    }
     
 #ifdef LOG4CXX
     if(logger->isDebugEnabled())
@@ -1381,7 +1388,39 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
             
         }
             break;
-        case EVerticalWellbore:
+        case EVerticalWellHe:
+        {
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_outer);
+            
+            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_inner);
+            
+            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellTe:
+        {
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_outer);
+            
+            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_inner);
+            
+            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellHePyTe:
         {
             int bc_outer_id = 2;
             int bc_inner_id = 3;
@@ -1477,11 +1516,66 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
             
         }
             break;
-        case EVerticalWellbore:
+        case EVerticalWellHe:
         {
             const int matid = 1;
             TPZDualPoisson * mat = new TPZDualPoisson(matid);
-//            TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
+            mphysics->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_inner);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
+            bc_impervious->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellTe:
+        {
+            const int matid = 1;
+            TPZDualPoisson * mat = new TPZDualPoisson(matid);
+            mphysics->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_inner);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
+            bc_impervious->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellHePyTe:
+        {
+            const int matid = 1;
+            TPZDualPoisson * mat = new TPZDualPoisson(matid);
             mphysics->InsertMaterialObject(mat);
             
             int bc_outer_id = 2;
