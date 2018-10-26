@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
 #endif
     
     TSimulationControl * sim_control = NULL;
-    if(argc != 6){
+    if(argc != 7){
         sim_control = new TSimulationControl;
     }
     else{
@@ -353,10 +353,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     /// Hard code controls
     bool should_renumber_Q = true;
-    bool use_pardiso_Q = true;
+    bool use_pardiso_Q = false;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
+    bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
     
     
@@ -417,7 +418,13 @@ int ComputeApproximation(TSimulationControl * sim_control)
             // ------------------ Create CMesh multiphysics -------------------
             TPZCompMesh *cmeshMult = CreateCmeshMulti(meshvec,sim_control);
             TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, cmeshMult);
-            TPZCompMeshTools::CreatedCondensedElements(cmeshMult, keep_lagrangian_multiplier_Q);
+            
+            TPZCompMeshTools::GroupElements(cmeshMult);
+            std::cout << "Created grouped elements\n";
+            TPZCompMeshTools::CreatedCondensedElements(cmeshMult, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+            std::cout << "Created condensed elements\n";
+            cmeshMult->CleanUpUnconnectedNodes();
+            cmeshMult->ExpandSolution();
             
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
@@ -525,8 +532,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             
             int h_level = i;
-            int ndof = cmeshMult->NEquations();
-            int ndof_cond = cmeshMult->Solution().Rows();
+            int ndof = cmeshMult->Solution().Rows();
+            int ndof_cond = cmeshMult->NEquations();
             REAL h = 1./REAL(n_elements);
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
@@ -576,15 +583,17 @@ int ComputeApproximation(TSimulationControl * sim_control)
         output << " Dual convergence rates = " << setw(5) << d_conv << std::endl;
         output << " Divergence convergence rates = " << setw(5) << h_conv << std::endl;
         output << std::endl;
-        output << "TSimulation control used :" << std::endl;
-        sim_control->Print(output);
-        output << std::endl;
-        output << std::endl;
-        output << " ------------------------------------------------------------------ " << std::endl;
         output.flush();
         
     }// n_p_levels
     
+    output << std::endl;
+    output << "TSimulation control used :" << std::endl;
+    sim_control->Print(output);
+    output << std::endl;
+    output << std::endl;
+    output << " ------------------------------------------------------------------ " << std::endl;
+    output.flush();
     
 //    std::string mathematicaFilename = "NoName.nb";
 //    std::stringstream Mathsout;
