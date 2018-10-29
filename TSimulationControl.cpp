@@ -14,7 +14,7 @@ TSimulationControl::TSimulationControl(){
     m_geometry_type     = EAcademic;
     m_h_levels          = 1;
     m_red_black_stride_Q  = true;
-    m_p_levels          = 2;
+    m_p_levels          = 1;
     m_Hdiv_plusplus_Q   = false;
     m_draw_vtk_Q        = true;
     
