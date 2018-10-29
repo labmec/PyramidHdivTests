@@ -111,6 +111,8 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
+int gIntegrationOrder = 10;
+
 #define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
@@ -218,9 +220,6 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
 #endif
     
 }
-
-
-int gIntegrationOrder = 5;
 
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
     TPZFMatrix<STATE> flux_and_f;
