@@ -12,7 +12,7 @@ TSimulationControl::TSimulationControl(){
     
     m_run_type          = EDividedPyramidIncreasedOrder4;
     m_geometry_type     = EAcademic;
-    m_h_levels          = 0;
+    m_h_levels          = 3;
     m_red_black_stride_Q  = true;
     m_p_levels          = 1;
     m_Hdiv_plusplus_Q   = false;

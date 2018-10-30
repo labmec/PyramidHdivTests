@@ -114,6 +114,9 @@ void VerifyDRhamCompatibility(TSimulationControl * control);
 
 int gIntegrationOrder = 10;
 
+/// Print Volumetric elements
+void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
+
 #define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
@@ -356,8 +359,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = false;
-    const int n_threads_error = 0;
-    const int n_threads_assembly = 0;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -736,6 +739,12 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
                 DebugStop();
             }
 #endif
+
+    //    {
+//        std::stringstream vols_name;
+//        vols_name << "geometry_vols.txt";
+//        PrintGeometryVols(gmesh, vols_name);
+//    }
     
     // ------------------ Dividing pyramids in tets -------------------
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
@@ -797,6 +806,47 @@ int ConvergenceTest(TSimulationControl * control)
     ApproximationError(nref, porder, errors,hdivmm, control);
     
     return 0;
+}
+
+void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name){
+    
+    std::ofstream mesh_data(file_name.str().c_str(),std::ios::app);
+    
+    int64_t nel = gmesh->NElements();
+    int dim = gmesh->Dimension();
+    TPZStack<int64_t> gel_indexes;
+    for (int64_t iel = 0; iel < nel; iel++) {
+        TPZGeoEl * gel = gmesh->Element(iel);
+#ifdef PZDEBUG
+        if (!gel) {
+            DebugStop();
+        }
+#endif
+        if (gel->Dimension() != dim || gel->HasSubElement()) {
+            continue;
+        }
+        gel_indexes.Push(gel->Index());
+    }
+    
+    // Writing element nodes
+    int64_t n_vols = gel_indexes.size();
+    mesh_data << std::setw(5) << n_vols << std::endl;
+    TPZFMatrix<REAL> xcoor;
+    
+    for (int64_t ivol = 0; ivol < n_vols; ivol++) {
+        TPZGeoEl * gel = gmesh->Element(gel_indexes[ivol]);
+        gel->NodesCoordinates(xcoor);
+        int nr = xcoor.Rows();
+        int nc = xcoor.Cols();
+        for (int c = 0; c < nc; c++) {
+            for (int r = 0; r < nr; r++) {
+                mesh_data << std::setw(20) << xcoor(r,c) ;
+            }
+        }
+        mesh_data << std::endl;
+    }
+    mesh_data.flush();
+    return;
 }
 
 void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm, TSimulationControl * control)
