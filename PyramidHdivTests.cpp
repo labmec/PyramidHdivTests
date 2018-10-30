@@ -54,6 +54,7 @@
 // Simulation Control
 #include "TSimulationControl.h"
 
+#include "TPZHybridizeHDiv.h"
 
 #include "run_stats_table.h"
 #ifdef USING_TBB
@@ -312,12 +313,14 @@ int main(int argc, char *argv[])
     std::string FileName = dirname;
     FileName = dirname + "/Projects/PyramidHdivTests/";
     FileName += "pyramlogfile.cfg";
-    InitializePZLOG(FileName);
+    InitializePZLOG();
 #endif
     
     TSimulationControl * sim_control = NULL;
     if(argc != 7){
         sim_control = new TSimulationControl;
+        sim_control->m_run_type = EHexaHedra;
+        sim_control->m_h_levels = 3;
     }
     else{
         sim_control = new TSimulationControl(argv);
@@ -353,8 +356,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = false;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 0;
+    const int n_threads_assembly = 0;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -391,40 +394,60 @@ int ComputeApproximation(TSimulationControl * sim_control)
             int n_elements = integer_power(2,i);
             gmesh = GeometryConstruction(i,sim_control);
             
-            TPZManVector<TPZCompMesh*,2> meshvec(2);
+            TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
             
             /// Construction for Hdiv (velocity) approximation space
-            meshvec[0] = CreateCmeshFlux(gmesh, sim_control, p);
+            meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
             
             /// Construction for L2 (pressure) approximation space
-            meshvec[1] = CreateCmeshPressure(gmesh, sim_control, p);
+            meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
             
             if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
             {
-                IncreasePyramidSonOrder(meshvec,p);
+                IncreasePyramidSonOrder(meshvecOrig,p);
             }
             
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
             {
                 std::stringstream sout;
-                meshvec[0]->Print(sout);
-                meshvec[1]->Print(sout);
+                meshvecOrig[0]->Print(sout);
+                meshvecOrig[1]->Print(sout);
                 LOGPZ_DEBUG(logger, sout.str())
             }
 #endif
-            
             // ------------------ Create CMesh multiphysics -------------------
-            TPZCompMesh *cmeshMult = CreateCmeshMulti(meshvec,sim_control);
-            TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, cmeshMult);
+            TPZCompMesh *cmeshMultOrig = CreateCmeshMulti(meshvecOrig,sim_control);
+
+            TPZCompMesh *cmeshMult = 0;
+            TPZManVector<TPZCompMesh *,2> meshvec(2,0);
+            bool hybrid = true;
+            if(hybrid)
+            {
+                
+    //            TPZCompMesh *cmeshMultHybrid = 0;
+    //            TPZManVector<TPZCompMesh *,2> meshvecHybrid(2,0);
+                TPZHybridizeHDiv hybrid;
+                auto [cmeshMultHybrid,meshvecHybrid] = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
+                hybrid.GroupElements(cmeshMultHybrid);
+
+                cmeshMult = cmeshMultHybrid;
+                meshvec = meshvecHybrid;
+//            TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, cmeshMult);
+            }
+            else
+            {
             
-            TPZCompMeshTools::GroupElements(cmeshMult);
-            std::cout << "Created grouped elements\n";
-            TPZCompMeshTools::CreatedCondensedElements(cmeshMult, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-            std::cout << "Created condensed elements\n";
-            cmeshMult->CleanUpUnconnectedNodes();
-            cmeshMult->ExpandSolution();
-            
+                TPZCompMeshTools::GroupElements(cmeshMultOrig);
+                std::cout << "Created grouped elements\n";
+                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                std::cout << "Created condensed elements\n";
+                cmeshMultOrig->CleanUpUnconnectedNodes();
+                cmeshMultOrig->ExpandSolution();
+                
+                cmeshMult = cmeshMultOrig;
+                meshvec = meshvecOrig;
+            }
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
             {
@@ -522,6 +545,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             
 #ifdef USING_BOOST
             error_time = boost::numeric_cast<REAL>((terr2 - terr1).total_milliseconds());
+            std::cout << "Computed errors " << errors << std::endl;
             std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " ms." << std::endl;
 #endif
             
@@ -640,7 +664,14 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             const int matid = 1;
             /// Defining the type o geometry
             TPZAcademicGeoMesh academic;
-            academic.SetMeshType(TPZAcademicGeoMesh::EPyramid);
+            if(sim_control->m_run_type == EHexaHedra)
+            {
+                academic.SetMeshType(TPZAcademicGeoMesh::EHexa);
+            }
+            else
+            {
+                academic.SetMeshType(TPZAcademicGeoMesh::EPyramid);
+            }
             if (sim_control->m_run_type == ETetrahedra) {
                 academic.SetMeshType(TPZAcademicGeoMesh::ETetrahedra);
             }
@@ -648,7 +679,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             academic.SetBCIDVector(BCids);
             academic.SetMaterialId(matid);
             academic.SetNumberElements(n_elements);
-            if (run_type != ETetrahedra) {
+            if (run_type != ETetrahedra && run_type != EHexaHedra) {
                 if (sim_control->m_red_black_stride_Q) {
                     gmesh = academic.RedBlackPyramidalAndHexagonalMesh();
                 }else{
@@ -657,7 +688,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             }
             else
             {
-                gmesh = academic.TetrahedralMesh();
+                gmesh = academic.CreateGeoMesh();
             }
         }
             break;
