@@ -427,8 +427,13 @@ int ComputeApproximation(TSimulationControl * sim_control)
             bool hybrid = true;
             if(hybrid)
             {
+//                TPZCompMesh *cmeshMultHybrid = 0;
+//                TPZManVector<TPZCompMesh *,2> meshvecHybrid(2,0);
                 TPZHybridizeHDiv hybrid;
-                auto [cmeshMultHybrid,meshvecHybrid] = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
+                std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
+                chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
+                TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
+                TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
                 hybrid.GroupElements(cmeshMultHybrid);
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
