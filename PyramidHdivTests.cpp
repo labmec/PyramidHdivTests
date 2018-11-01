@@ -358,7 +358,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     /// Hard code controls
     bool should_renumber_Q = true;
-    bool use_pardiso_Q = false;
+    bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
@@ -427,16 +427,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
             bool hybrid = true;
             if(hybrid)
             {
-                
-    //            TPZCompMesh *cmeshMultHybrid = 0;
-    //            TPZManVector<TPZCompMesh *,2> meshvecHybrid(2,0);
                 TPZHybridizeHDiv hybrid;
                 auto [cmeshMultHybrid,meshvecHybrid] = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
                 hybrid.GroupElements(cmeshMultHybrid);
-
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
-//            TPZBuildMultiphysicsMesh::TransferFromMeshes(meshvec, cmeshMult);
             }
             else
             {
@@ -740,12 +735,12 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             }
 #endif
 
-    //    {
+//    {
 //        std::stringstream vols_name;
 //        vols_name << "geometry_vols.txt";
 //        PrintGeometryVols(gmesh, vols_name);
 //    }
-    
+
     // ------------------ Dividing pyramids in tets -------------------
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
        run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
@@ -817,6 +812,7 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name){
     TPZStack<int64_t> gel_indexes;
     for (int64_t iel = 0; iel < nel; iel++) {
         TPZGeoEl * gel = gmesh->Element(iel);
+        
 #ifdef PZDEBUG
         if (!gel) {
             DebugStop();
@@ -1559,7 +1555,7 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
 
 TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control)
 {
-    const int int_p_order = 5;
+    const int int_p_order = 10;
     //Creating computational mesh for multiphysic elements
     TPZGeoMesh *gmesh = meshvec[0]->Reference();
     int dim = gmesh->Dimension();
@@ -1576,7 +1572,6 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
             const int matbcfake = 3;
             const int dirichlet = 0;
             TPZDualPoisson * mat = new TPZDualPoisson(matid);
-//            TPZMixedPoisson *mat = new TPZMixedPoisson(matid,dim);
             {
                 TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing,int_p_order);
                 force->SetPolynomialOrder(gIntegrationOrder);
@@ -2802,7 +2797,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
 //            DebugStop();
 //        }
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
-        intel->PRefine(2*pFlux);
+//        intel->PRefine(2*pFlux);
         TPZCompElSide large;
 
         if(hasdependency)
