@@ -46,6 +46,7 @@
 #include "pzshapetetra.h"
 #include "pzelementgroup.h"
 #include "TPZVecL2.h"
+#include "pzl2projection.h"
 #include "pzmatrix.h"
 #include "TPZAcademicGeoMesh.h"
 #include "TPZGmshReader.h"
@@ -225,6 +226,23 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     
 }
 
+void AnalyticPotential(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
+    TPZFMatrix<STATE> flux_and_f;
+    Analytic(pt, u, flux_and_f);
+    return;
+}
+
+void AnalyticFlux(const TPZVec<REAL> &pt, TPZVec<STATE> &flux) {
+    TPZManVector<STATE,1> u(1);
+    TPZFMatrix<STATE> flux_and_f;
+    Analytic(pt, u, flux_and_f);
+    flux.Resize(3);
+    flux[0] = flux_and_f(0,0);
+    flux[1] = flux_and_f(1,0);
+    flux[2] = flux_and_f(2,0);
+    return;
+}
+
 void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
     TPZFMatrix<STATE> flux_and_f;
     Analytic(pt, u, flux_and_f);
@@ -388,7 +406,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
         output << " Polynomial order  =  " << p << std::endl;
         output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(5) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(25) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
     
-        for (int i = 0 ; i <= n_h_levels; i++){
+        for (int i = 1 ; i <= n_h_levels; i++){
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
@@ -409,6 +427,64 @@ int ComputeApproximation(TSimulationControl * sim_control)
             {
                 IncreasePyramidSonOrder(meshvecOrig,p);
             }
+            
+            {
+                int mesh_index = 0; // flux projection
+                TPZAnalysis an(meshvecOrig[mesh_index],true);
+                TPZStepSolver<STATE> step;
+                step.SetDirect(ELDLt);
+                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
+                sparse.SetNumThreads(n_threads_assembly);
+                an.SetStructuralMatrix(sparse);
+                an.SetSolver(step);
+                an.Assemble();
+                an.Solve();
+                if (sim_control->m_draw_vtk_Q) {
+                    
+                    std::cout << "Flux Post-processing..." << std::endl;
+                    TPZStack<std::string> scalnames, vecnames;
+//                    scalnames.Push("Solution");
+                    vecnames.Push("Solution");
+                    std::string plotfile = "Projected_flux.vtk";
+                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+                    
+                    int postprocessresolution = 0;
+                    an.PostProcess(postprocessresolution);
+                    
+                }
+                
+            }
+            
+            {
+                int mesh_index = 1; // pressure projection
+                TPZAnalysis an(meshvecOrig[mesh_index],false); // Not working when second arg is true
+                TPZStepSolver<STATE> step;
+                step.SetDirect(ELDLt);
+                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
+                sparse.SetNumThreads(n_threads_assembly);
+                an.SetStructuralMatrix(sparse);
+                an.SetSolver(step);
+                an.Assemble();
+                an.Solve();
+                if (sim_control->m_draw_vtk_Q) {
+                    
+                    std::cout << "Pressure Post-processing..." << std::endl;
+                    TPZStack<std::string> scalnames, vecnames;
+                    scalnames.Push("Solution");
+                    std::string plotfile = "Projected_pressure.vtk";
+                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+                    
+                    int postprocessresolution = 0;
+                    an.PostProcess(postprocessresolution);
+                    
+                }
+                
+            }
+            
+            
+
+            
+
             
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
@@ -1437,7 +1513,10 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * contro
     cmesh->SetDefaultOrder(p);
     cmesh->ApproxSpace().SetAllCreateFunctionsContinuous();
     cmesh->ApproxSpace().CreateDisconnectedElements(true);
-    TPZDualPoisson * mymat = new TPZDualPoisson(matid);
+    int nstate =1;
+    TPZVec<STATE> sol(1);
+    TPZL2Projection * mymat = new TPZL2Projection(matid,dim,nstate,sol);
+    mymat->SetForcingFunction(AnalyticPotential, gIntegrationOrder);
     cmesh->InsertMaterialObject(mymat);
     cmesh->AutoBuild();
     
@@ -1445,7 +1524,7 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * contro
     for (int64_t ic=0; ic<ncon; ic++) {
         cmesh->ConnectVec()[ic].SetLagrangeMultiplier(1);
     }
-    
+    cmesh->InitializeBlock();
     return cmesh;
 }
 
@@ -1459,7 +1538,8 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
     cmesh->SetDefaultOrder(p);
     
     TPZVecL2 *mymat = new TPZVecL2(matid);
-    mymat->SetForcingFunction(FluxFunc, p);
+    mymat->SetDimension(dim);
+    mymat->SetForcingFunction(AnalyticFlux, gIntegrationOrder);
     cmesh->InsertMaterialObject(mymat);
     
     TPZFMatrix<> val1(3,3,0.);
