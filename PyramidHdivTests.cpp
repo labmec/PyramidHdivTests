@@ -330,10 +330,10 @@ int main(int argc, char *argv[])
     HDivPiola = 1;
 
 #ifdef LOG4CXX
-    std::string dirname = PZSOURCEDIR;
-    std::string FileName = dirname;
-    FileName = dirname + "/Projects/PyramidHdivTests/";
-    FileName += "pyramlogfile.cfg";
+//    std::string dirname = PZSOURCEDIR;
+//    std::string FileName = dirname;
+//    FileName = dirname + "/Projects/PyramidHdivTests/";
+//    FileName += "pyramlogfile.cfg";
     InitializePZLOG();
 #endif
     
@@ -375,7 +375,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     const int dim = 3;
     
     /// Hard code controls
-    bool should_renumber_Q = true;
+    bool should_renumber_Q = false;
     bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
@@ -400,7 +400,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     TPZManVector<REAL,20> dual_error(n_h_levels+1,0.);
     TPZManVector<REAL,20> div_error(n_h_levels+1,0.);
     
-    for (int p = 1; p <= n_p_levels; p++) {
+    for (int p = 3; p <= n_p_levels; p++) {
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
@@ -429,8 +429,19 @@ int ComputeApproximation(TSimulationControl * sim_control)
             }
             
             {
+                
+//                int64_t n_con = meshvecOrig[0]->ConnectVec();
+
+                for (auto &ic: meshvecOrig[0]->ConnectVec()) {
+                    ic.RemoveDepend();
+                }
+                std::ofstream flux_file("flux_cmesh.txt");
+                meshvecOrig[0]->Print(flux_file);
+            }
+            
+            {
                 int mesh_index = 0; // flux projection
-                TPZAnalysis an(meshvecOrig[mesh_index],true);
+                TPZAnalysis an(meshvecOrig[mesh_index],false);
                 TPZStepSolver<STATE> step;
                 step.SetDirect(ELDLt);
                 TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
@@ -438,6 +449,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 an.SetStructuralMatrix(sparse);
                 an.SetSolver(step);
                 an.Assemble();
+                
                 an.Solve();
                 if (sim_control->m_draw_vtk_Q) {
                     
@@ -453,6 +465,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
                     
                 }
                 
+            }
+            
+            {
+                std::ofstream pressure_file("pressure_cmesh.txt");
+                meshvecOrig[1]->Print(pressure_file);
             }
             
             {
@@ -480,10 +497,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 }
                 
             }
-            
-            
-
-            
 
             
 #ifdef LOG4CXX
@@ -500,7 +513,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 
             TPZCompMesh *cmeshMult = 0;
             TPZManVector<TPZCompMesh *,2> meshvec(2,0);
-            bool hybrid = true;
+            bool hybrid = false;
             if(hybrid)
             {
 //                TPZCompMesh *cmeshMultHybrid = 0;
@@ -517,12 +530,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             else
             {
             
-                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-                std::cout << "Created grouped elements\n";
-                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-                std::cout << "Created condensed elements\n";
-                cmeshMultOrig->CleanUpUnconnectedNodes();
-                cmeshMultOrig->ExpandSolution();
+//                TPZCompMeshTools::GroupElements(cmeshMultOrig);
+//                std::cout << "Created grouped elements\n";
+//                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+//                std::cout << "Created condensed elements\n";
+//                cmeshMultOrig->CleanUpUnconnectedNodes();
+//                cmeshMultOrig->ExpandSolution();
                 
                 cmeshMult = cmeshMultOrig;
                 meshvec = meshvecOrig;
@@ -565,7 +578,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
 #endif
             // ------------------ Assembling -------------------
-            an.Assemble();
+//            an.Assemble();
 #ifdef USING_BOOST
             boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
             assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
@@ -580,19 +593,32 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
-            an.Solve();
+//            an.Solve();
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
             solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
             std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
 #endif
+            
             UnwrapMesh(cmeshMult);
             an.LoadSolution();
-            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+//            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
             TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
             
             std::cout << "Solved!" << std::endl;
+            
+            {
+                an.AssembleResidual();
+                {
+                    std::ofstream out("res_by_el.txt");
+                    an.PrintVectorByElement(out, an.Rhs(),1.0e-5);
+                }
+//                an.Rhs().Print("r = ",std::cout,EMathematicaInput);
+                REAL norm = Norm(an.Rhs());
+                std::cout << "Residual norm = " << norm << std::endl;
+                
+            }
             
             // ------------------ Post Processing VTK -------------------
             if (sim_control->m_draw_vtk_Q) {
@@ -1613,6 +1639,7 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
     }
     
     cmesh->SetAllCreateFunctionsHDiv();
+//    cmesh->ApproxSpace().CreateDisconnectedElements(true);
     cmesh->AutoBuild();
     
     if (control->m_Hdiv_plusplus_Q)
@@ -2882,9 +2909,10 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
 //            DebugStop();
 //        }
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
-//        intel->PRefine(2*pFlux);
+        intel->PRefine(2*pFlux);
         TPZCompElSide large;
-
+//        cel->SetIntegrationRule(2*pFlux);
+        
         if(hasdependency)
         {
             TPZGeoElSide gelside(gel,10);
@@ -2931,6 +2959,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
         intel->PRefine(2*pFlux);
+//        cel->SetIntegrationRule(2*pFlux);
     }
     meshvec[1]->ExpandSolution();
 }
