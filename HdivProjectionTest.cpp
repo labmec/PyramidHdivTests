@@ -51,7 +51,6 @@
 #include "TPZAcademicGeoMesh.h"
 #include "TPZGmshReader.h"
 #include "pzcondensedcompel.h"
-#include "pzshapetriang.h"
 
 // Simulation Control
 #include "TSimulationControl.h"
@@ -94,7 +93,7 @@ TPZGeoMesh * CreateGeoMeshHexaOfPir();
 TPZGeoMesh * CreateGeoMeshHexaOfPirTetra();
 TPZGeoMesh * CreateGeoMeshPrism();
 TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * control, int p);
-TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, int p);
+TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, int p, bool DisconnectedQ);
 TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control);
 void LoadSolution(TPZCompMesh *cpressure);
 void ProjectFlux(TPZCompMesh *cfluxmesh);
@@ -107,14 +106,14 @@ TPZAutoPointer<TPZRefPattern> PyramidRef();
 TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra();
 
 void DividePyramids(TPZGeoMesh &gmesh);
-void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
+void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux, bool DisconnectedQ);
 
 void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-int gIntegrationOrder = 5;
+int gIntegrationOrder = 10;
 
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
@@ -307,8 +306,6 @@ void CheckNormalContinuity(TPZCompMesh * cmesh);
 
 void CheckNormalContinuity(TPZCompElSide & small, TPZCompElSide & large);
 
-void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv, TPZCompEl * cel_bound, TPZVec<REAL> & xi_bound, TPZVec<REAL> & normal);
-
 int ConvergenceTest(TSimulationControl * control);
 
 void ComputeConvergenceRates(TPZVec<REAL> &error, TPZVec<REAL> &h_size, TPZVec<REAL> &convergence);
@@ -381,13 +378,9 @@ int ComputeApproximation(TSimulationControl * sim_control)
     int n_h_levels  = sim_control->m_h_levels;
     const int dim = 3;
     
-    /// Hard code controls
-    bool should_renumber_Q = false;
-    bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
-//    bool keep_lagrangian_multiplier_Q = true;
-//    bool keep_matrix_Q = false;
+    bool DisconnectedQ = false;
     TPZGeoMesh *gmesh = NULL;
     
     
@@ -422,226 +415,53 @@ int ComputeApproximation(TSimulationControl * sim_control)
             int n_elements = integer_power(2,i);
             gmesh = GeometryConstruction(i,sim_control);
             
-            TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
+            TPZManVector<TPZCompMesh*,1> meshvecOrig(1);
             
             /// Construction for Hdiv (velocity) approximation space
-            meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
-            
-            /// Construction for L2 (pressure) approximation space
-            meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
+            meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p, DisconnectedQ );
             
             if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
             {
-                IncreasePyramidSonOrder(meshvecOrig,p);
+                IncreasePyramidSonOrder(meshvecOrig,p, DisconnectedQ);
+            }
+            
+            CheckNormalContinuity(meshvecOrig[0]);
+            
+            if (0) {
+                for (auto &ic: meshvecOrig[0]->ConnectVec()) {
+                    ic.RemoveDepend();
+                }
             }
             
             {
-                
-//                for (auto &ic: meshvecOrig[0]->ConnectVec()) {
-//                    ic.RemoveDepend();
-//                }
                 std::ofstream flux_file("flux_cmesh.txt");
                 meshvecOrig[0]->Print(flux_file);
             }
             
-//            {
-//                int mesh_index = 0; // flux projection
-//                TPZAnalysis an(meshvecOrig[mesh_index],false);
-//                TPZStepSolver<STATE> step;
-//                step.SetDirect(ELDLt);
-//                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
-//                sparse.SetNumThreads(n_threads_assembly);
-//                an.SetStructuralMatrix(sparse);
-//                an.SetSolver(step);
-//                an.Assemble();
-//
-//                an.Solve();
-//                if (sim_control->m_draw_vtk_Q) {
-//
-//                    std::cout << "Flux Post-processing..." << std::endl;
-//                    TPZStack<std::string> scalnames, vecnames;
-//                    vecnames.Push("Solution");
-//                    std::string plotfile = "Projected_flux.vtk";
-//                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-//
-//                    int postprocessresolution = 0;
-//                    an.PostProcess(postprocessresolution);
-//
-//                }
-//
-//            }
-            
-            {
-                std::ofstream pressure_file("pressure_cmesh.txt");
-                meshvecOrig[1]->Print(pressure_file);
-            }
-            
-            {
-//                int mesh_index = 1; // pressure projection
-//                TPZAnalysis an(meshvecOrig[mesh_index],false); // Not working when second arg is true
-//                TPZStepSolver<STATE> step;
-//                step.SetDirect(ELDLt);
-//                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
-//                sparse.SetNumThreads(n_threads_assembly);
-//                an.SetStructuralMatrix(sparse);
-//                an.SetSolver(step);
-//                an.Assemble();
-//                an.Solve();
-//                if (sim_control->m_draw_vtk_Q) {
-//
-//                    std::cout << "Pressure Post-processing..." << std::endl;
-//                    TPZStack<std::string> scalnames, vecnames;
-//                    scalnames.Push("Solution");
-//                    std::string plotfile = "Projected_pressure.vtk";
-//                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-//
-//                    int postprocessresolution = 0;
-//                    an.PostProcess(postprocessresolution);
-//
-//                }
-                
-            }
-
-            
-#ifdef LOG4CXX
-            if (logger->isDebugEnabled())
-            {
-                std::stringstream sout;
-                meshvecOrig[0]->Print(sout);
-                meshvecOrig[1]->Print(sout);
-                LOGPZ_DEBUG(logger, sout.str())
-            }
-#endif
-            // ------------------ Create CMesh multiphysics -------------------
-            TPZCompMesh *cmeshMultOrig = CreateCmeshMulti(meshvecOrig,sim_control);
-
-            TPZCompMesh *cmeshMult = 0;
-            TPZManVector<TPZCompMesh *,2> meshvec(2,0);
-            bool hybrid = false;
-            if(hybrid)
-            {
-//                TPZCompMesh *cmeshMultHybrid = 0;
-//                TPZManVector<TPZCompMesh *,2> meshvecHybrid(2,0);
-                TPZHybridizeHDiv hybrid;
-                std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
-                chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
-                TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
-                TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-//                hybrid.GroupElements(cmeshMultHybrid);
-                cmeshMult = cmeshMultHybrid;
-                meshvec = meshvecHybrid;
-                
-                CheckNormalContinuity(meshvec[0]);
-                
-            }
-            else
-            {
-            
-//                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-//                std::cout << "Created grouped elements\n";
-//                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-//                std::cout << "Created condensed elements\n";
-//                cmeshMultOrig->CleanUpUnconnectedNodes();
-//                cmeshMultOrig->ExpandSolution();
-                
-                cmeshMult = cmeshMultOrig;
-                meshvec = meshvecOrig;
-            }
-#ifdef LOG4CXX
-            if (logger->isDebugEnabled())
-            {
-                std::stringstream sout;
-                cmeshMult->Print(sout);
-                LOGPZ_DEBUG(logger, sout.str())
-            }
-#endif
-            {
-                std::ofstream sout("cmesh.txt");
-                cmeshMult->Print(sout);
-            }
-            cmeshMult->CleanUpUnconnectedNodes();
-
-            
-            // ------------------ Creating Analysis object -------------------
-            TPZAnalysis an(cmeshMult,should_renumber_Q);
+            int mesh_index = 0; // flux projection
+            TPZAnalysis an(meshvecOrig[mesh_index],false);
             TPZStepSolver<STATE> step;
             step.SetDirect(ELDLt);
+            TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
+            sparse.SetNumThreads(n_threads_assembly);
+            an.SetStructuralMatrix(sparse);
+            an.SetSolver(step);
+            an.Assemble();
             
-            if (use_pardiso_Q) {
-                TPZSymetricSpStructMatrix sparse(cmeshMult);
-                sparse.SetNumThreads(n_threads_assembly);
-                an.SetStructuralMatrix(sparse);
-                an.SetSolver(step);
-            }else{
-                TPZSkylineStructMatrix skyl(cmeshMult);
-                skyl.SetNumThreads(n_threads_assembly);
-                an.SetStructuralMatrix(skyl);
-                an.SetSolver(step);
-            }
-            
-            std::cout << "Starting assemble..." << std::endl;
-            std::cout << "Nequations = " << cmeshMult->NEquations() << std::endl;
-#ifdef USING_BOOST
-            boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
-#endif
-            // ------------------ Assembling -------------------
-//            an.Assemble();
-#ifdef USING_BOOST
-            boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
-            assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
-            std::cout << "Total wall time of Assemble = " << assemble_time << " ms." << std::endl;
-#endif
-            
-            TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
-            
-            std::cout << "Assembled!" << std::endl;
-        
-            std::cout << "Starting Solve..." << std::endl;
-#ifdef USING_BOOST
-            boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
-#endif
-//            an.Solve();
-            
-#ifdef USING_BOOST
-            boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
-            solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
-            std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
-#endif
-            
-            UnwrapMesh(cmeshMult);
-            an.LoadSolution();
-//            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
-            TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
-            
-            std::cout << "Solved!" << std::endl;
-            
-            {
-                an.AssembleResidual();
-//                {
-//                    std::ofstream out("res_by_el.txt");
-//                    an.PrintVectorByElement(out, an.Rhs(),1.0e-5);
-//                }
-//                an.Rhs().Print("r = ",std::cout,EMathematicaInput);
-                REAL norm = Norm(an.Rhs());
-                std::cout << "Residual norm = " << norm << std::endl;
-                
-            }
-            
-            // ------------------ Post Processing VTK -------------------
+            an.Solve();
             if (sim_control->m_draw_vtk_Q) {
                 
-                std::cout << "Starting Post-processing..." << std::endl;
+                std::cout << "Flux Post-processing..." << std::endl;
                 TPZStack<std::string> scalnames, vecnames;
-                scalnames.Push("p");
-                scalnames.Push("div_q");
-                vecnames.Push("q");
-                std::string plotfile = "Approximated_Solution.vtk";
+                vecnames.Push("Solution");
+                std::string plotfile = "Projected_flux.vtk";
                 an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
                 
                 int postprocessresolution = 0;
                 an.PostProcess(postprocessresolution);
                 
             }
+            
             std::cout << "Calculating error..." << std::endl;
             
             an.SetExact(Analytic);
@@ -667,8 +487,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             
             int h_level = i;
-            int ndof = cmeshMult->Solution().Rows();
-            int ndof_cond = cmeshMult->NEquations();
+            int ndof = meshvecOrig[0]->Solution().Rows();
+            int ndof_cond = meshvecOrig[0]->NEquations();
             REAL h = 1./REAL(n_elements);
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
@@ -685,15 +505,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime deletion_t1 = boost::posix_time::microsec_clock::local_time();
 #endif
             
-            delete cmeshMult;
-            delete meshvec[0];
-            int64_t nel = meshvec[1]->NElements();
-            gmesh->ResetReference();
-            for (int64_t el=0; el<nel; el++) {
-                TPZCompEl *cel = meshvec[1]->Element(el);
-                delete cel;
-            }
-            delete meshvec[1];
+            delete meshvecOrig[0];
             delete gmesh;
             
 #ifdef USING_BOOST
@@ -730,31 +542,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
     output << " ------------------------------------------------------------------ " << std::endl;
     output.flush();
     
-//    std::string mathematicaFilename = "NoName.nb";
-//    std::stringstream Mathsout;
-//    if(run_type == ETetrahedra){Mathsout << "convergenceRatesTetMesh";}
-//    if(run_type == EPyramid){Mathsout << "convergenceRatesPyrMesh";}
-//    if(run_type == EDividedPyramid){Mathsout << "convergenceRatesDividedPyrMesh";}
-//    if(run_type == EDividedPyramidIncreasedOrder){Mathsout << "convergenceRatesDivPyrIncOrdMesh";}
-//    if(run_type == EDividedPyramid4){Mathsout << "convergenceRatesDividedPyr4Mesh";}
-//    if(run_type == EDividedPyramidIncreasedOrder4){Mathsout << "convergenceRatesDivPyr4IncOrdMesh";}
-//    Mathsout << sim_control->m_approx_order;
-//    if (hdiv_pp_Q) {
-//        Mathsout << "plusplus";
-//    }
-//    Mathsout << ".nb";
-//    mathematicaFilename = Mathsout.str();
-//    GenerateMathematicaWithConvergenceRates(neqVec,hSizeVec,h1ErrVec,l2ErrVec,semih1ErrVec,sim_control);
-//    std::cout << "Code finished! file " << mathematicaFilename << " written" << std::endl;
-    
     return 0;
 
 }
 
 void CheckNormalContinuity(TPZCompMesh * cmesh){
-    
-    cmesh->Reference()->ResetReference();
-    cmesh->LoadReferences();
     
     int mesh_dim  = cmesh->Dimension();
     int64_t n_dof = cmesh->Solution().Rows();
@@ -786,31 +578,14 @@ void CheckNormalContinuity(TPZCompMesh * cmesh){
             if (gel->SideDimension(iside)!=mesh_dim-1) {
                 continue;
             }
-            int64_t con_index = intel->SideConnectIndex(0, iside);
-            TPZGeoElSide gel_side(gel,iside);
-            TPZGeoElSide neigh = gel_side.Neighbour();
             
-            while (neigh not_eq gel_side) {
-                TPZCompElSide neigh_cel = neigh.Reference();
-                TPZInterpolatedElement * intel = dynamic_cast<TPZInterpolatedElement *>(neigh_cel.Element());
-                
-                if (intel) {
-                    int64_t intel_con_index = intel->SideConnectIndex(0, neigh_cel.Side());
-                    if (intel_con_index == con_index ) {
-                        break;
-                    }
-                }
-
-                neigh = neigh.Neighbour();
+            TPZConnect & con = intel->SideConnect(0, iside);
+            if (con.HasDependency()) {
+                TPZGeoElSide gel_side(gel,iside);
+                TPZCompElSide cel_large = gel_side.LowerLevelCompElementList2(1);
+                TPZCompElSide cel_small(cel,iside);
+                CheckNormalContinuity(cel_small, cel_large);
             }
-            
-            if (neigh == gel_side) {
-                DebugStop();
-            }
-            
-            TPZCompElSide cel_neigh = neigh.Reference();
-            TPZCompElSide cel_side(cel,iside);
-            CheckNormalContinuity(cel_side, cel_neigh);
             
         }
         
@@ -865,113 +640,22 @@ void CheckNormalContinuity(TPZCompElSide & small, TPZCompElSide & large){
         
         gel_small.Normal(x_hat, gel_small.Element(), gel_large.Element(), normal);
         
-        REAL normal_flux = 0;
         REAL var_norm = 0;
         REAL x_norm = 0;
-        
-        for (int k = 0; k < x_large.size(); k++) {
-            normal_flux += sol_small[k]*normal[k];
+        for (int k = 0; k < sol_large.size(); k++) {
+            var_norm += ((sol_large[k] - sol_small[k])*normal[k])*((sol_large[k] - sol_small[k])*normal[k]);
             x_norm += (x_large[k] - x_small[k])*(x_large[k] - x_small[k]);
         }
-        
-        var_norm = (normal_flux - sol_large[0])*(normal_flux - sol_large[0]);
         
         var_norm = sqrt(var_norm);
         x_norm = sqrt(x_norm);
         
-        CompareShapeFunctions(small, x_hat_vol, large.Element(), x_hat_vol_large, normal);
         bool check_Q = (var_norm < eps) and  (x_norm < eps);
         if (not check_Q) {
             std::cout << "ok the flux is not continuous. " << std::endl;
-            
             DebugStop();
         }
-        
-        
     }
-}
-
-void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv, TPZCompEl * cel_bound, TPZVec<REAL> & xi_bound, TPZVec<REAL> & normal){
-    
-    REAL eps = 1.0e-10;
-    
-    TPZCompEl * cel_hdiv = cel_hdiv_side.Element();
-    
-    TPZMaterialData data_hdiv,data_bound;
-    TPZInterpolatedElement * intel_hdiv = dynamic_cast<TPZInterpolatedElement * >(cel_hdiv);
-    TPZInterpolatedElement * intel_bound = dynamic_cast<TPZInterpolatedElement * >(cel_bound);
-    
-    if (!intel_hdiv or !intel_bound) {
-        DebugStop();
-    }
-    
-    int int_con_index = intel_hdiv->SideConnectLocId(0, cel_hdiv_side.Side());
-    int first_shape = 0;
-    for (int ic = 0; ic < int_con_index; ic++) {
-        first_shape += intel_hdiv->Connect(ic).NShape();
-    }
-    
-    intel_hdiv->InitMaterialData(data_hdiv);
-    intel_bound->InitMaterialData(data_bound);
-    
-    intel_hdiv->ComputeRequiredData(data_hdiv, xi_hdiv);
-    intel_bound->ComputeRequiredData(data_bound, xi_bound);
-    
-    TPZFMatrix<REAL> fluxes;
-    data_hdiv.ComputeFluxValues(fluxes);
-    {
-        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
-        TPZManVector<int,20> order(15,6);
-        TPZManVector<int64_t,4> id(4,4);
-        for (int i = 0; i < 4; i++) {
-            id[i] = cel_hdiv->Reference()->NodePtr(i)->Id();
-        }
-        pzshape::TPZShapeTetra::Shape(xi_hdiv, id, order, phi, dphi);
-        int aka = 0;
-    }
-    
-    {
-        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
-        TPZManVector<int,20> order(15,6);
-        TPZManVector<int64_t,4> id(3,3);
-        for (int i = 0; i < 3; i++) {
-            id[i] = cel_bound->Reference()->NodePtr(i)->Id();
-        }
-        pzshape::TPZShapeTriang::Shape(xi_bound, id, order, phi, dphi);
-        int aka = 0;
-    }
-    
-    // compute the difference
-    int n_shape = data_bound.phi.Rows();
-    TPZFMatrix<REAL> flux_normal(n_shape,1,0.0);
-    TPZFNMatrix<100,REAL> normal_component(n_shape,1,0.0);
-    REAL diff_accum = 0;
-    TPZFNMatrix<100,REAL> phi_s(n_shape,1);
-    for (int i = 0; i < n_shape; i++) {
-        int vec_index = data_hdiv.fVecShapeIndex[first_shape + i].first;
-        int shape_index = data_hdiv.fVecShapeIndex[first_shape + i].second;
-        phi_s(i,0) = data_hdiv.phi(shape_index,0);
-//        std::cout << "shape_index = " << shape_index << std::endl;
-        for (int k = 0; k < 3; k++) {
-            normal_component(i,0) += data_hdiv.fNormalVec(k,vec_index)* normal[k];
-            flux_normal(i,0) += fluxes(k,first_shape + i) * normal[k];
-        }
-
-        diff_accum += (flux_normal(i,0) - data_bound.phi(i,0))*(flux_normal(i,0) - data_bound.phi(i,0));
-    }
-//    normal_component.Print("Normal Component = ",std::cout);
-    
-    diff_accum/=n_shape;
-    diff_accum = sqrt(diff_accum);
-
-    bool check_Q = diff_accum < eps;
-    if (!check_Q) {
-        std::cout << "Some shape functions are different." <<std::endl;
-        flux_normal.Print("Normal flux = ",std::cout);
-        data_bound.phi.Print("Normal flux from boundary = ",std::cout);
-        (flux_normal - data_bound.phi).Print("Difference = ",std::cout);
-    }
-    
 }
 
 void ComputeConvergenceRates(TPZVec<REAL> &error, TPZVec<REAL> &h_size, TPZVec<REAL> &convergence){
@@ -1205,7 +889,7 @@ void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm
     TPZManVector<TPZCompMesh*,2> meshvec(2);
     meshvec[1] = CreateCmeshPressure(gmesh, control, porder);
     LoadSolution(meshvec[1]);
-    meshvec[0] = CreateCmeshFlux(gmesh, control, porder);
+    meshvec[0] = CreateCmeshFlux(gmesh, control, porder, false);
     TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
     
 #ifdef LOG4CXX
@@ -1784,7 +1468,7 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * contro
     return cmesh;
 }
 
-TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, int p)
+TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, int p, bool DisconnectedQ)
 {
     const int matid = 1;
     const int dim = 3;
@@ -1798,77 +1482,78 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
     mymat->SetForcingFunction(AnalyticFlux, gIntegrationOrder);
     cmesh->InsertMaterialObject(mymat);
     
-    TPZFMatrix<> val1(3,3,0.);
-    TPZFMatrix<> val2(3,1,0.);
-    
-    switch (control->m_geometry_type) {
-        case EAcademic:
-        {
-            int bc0 = -1;
-            int matbcfake = 3;
-            TPZBndCond *bnd = mymat->CreateBC(mymat, bc0, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bnd);
-            
-            TPZBndCond *bnd3 = mymat->CreateBC(mymat, matbcfake, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bnd3);
-            
-        }
-            break;
-        case EVerticalWellHe:
-        {
-            int bc_outer_id = 2;
-            int bc_inner_id = 3;
-            int bc_impervious_id = 4;
-            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_outer);
-            
-            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_inner);
-            
-            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_impervious);
-            
-        }
-            break;
-        case EVerticalWellTe:
-        {
-            int bc_outer_id = 2;
-            int bc_inner_id = 3;
-            int bc_impervious_id = 4;
-            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_outer);
-            
-            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_inner);
-            
-            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_impervious);
-            
-        }
-            break;
-        case EVerticalWellHePyTe:
-        {
-            int bc_outer_id = 2;
-            int bc_inner_id = 3;
-            int bc_impervious_id = 4;
-            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_outer);
-            
-            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_inner);
-            
-            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
-            cmesh->InsertMaterialObject(bc_impervious);
-            
-        }
-            break;
-        default:{
-            DebugStop();
-        }
-            break;
-    }
+//    TPZFMatrix<> val1(3,3,0.);
+//    TPZFMatrix<> val2(3,1,0.);
+//
+//    switch (control->m_geometry_type) {
+//        case EAcademic:
+//        {
+//            int bc0 = -1;
+//            int matbcfake = 3;
+//            TPZBndCond *bnd = mymat->CreateBC(mymat, bc0, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bnd);
+//
+//            TPZBndCond *bnd3 = mymat->CreateBC(mymat, matbcfake, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bnd3);
+//
+//        }
+//            break;
+//        case EVerticalWellHe:
+//        {
+//            int bc_outer_id = 2;
+//            int bc_inner_id = 3;
+//            int bc_impervious_id = 4;
+//            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_outer);
+//
+//            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_inner);
+//
+//            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_impervious);
+//
+//        }
+//            break;
+//        case EVerticalWellTe:
+//        {
+//            int bc_outer_id = 2;
+//            int bc_inner_id = 3;
+//            int bc_impervious_id = 4;
+//            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_outer);
+//
+//            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_inner);
+//
+//            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_impervious);
+//
+//        }
+//            break;
+//        case EVerticalWellHePyTe:
+//        {
+//            int bc_outer_id = 2;
+//            int bc_inner_id = 3;
+//            int bc_impervious_id = 4;
+//            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_outer);
+//
+//            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_inner);
+//
+//            TPZBndCond *bc_impervious = mymat->CreateBC(mymat, bc_impervious_id, dirichlet, val1, val2);
+//            cmesh->InsertMaterialObject(bc_impervious);
+//
+//        }
+//            break;
+//        default:{
+//            DebugStop();
+//        }
+//            break;
+//    }
     
     cmesh->SetAllCreateFunctionsHDiv();
+    cmesh->ApproxSpace().CreateDisconnectedElements(DisconnectedQ);
     cmesh->AutoBuild();
     
     if (control->m_Hdiv_plusplus_Q)
@@ -1919,12 +1604,6 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
                 TPZAutoPointer<TPZFunction<STATE> > bodyforce = force;
                 
                 mat->SetForcingFunction(bodyforce);
-            }
-            {
-                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
-                analytic_f->SetPolynomialOrder(gIntegrationOrder);
-                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
-                mat->SetForcingFunctionExact(analytic);
             }
             //inserindo o material na malha computacional
             mphysics->InsertMaterialObject(mat);
@@ -2856,7 +2535,7 @@ void VerifyDRhamCompatibility(TSimulationControl * control)
     int p = 1;
     meshvec[1] = CreateCmeshPressure(gmesh, control, p);
     LoadSolution(meshvec[1]);
-    meshvec[0] = CreateCmeshFlux(gmesh, control, p);
+    meshvec[0] = CreateCmeshFlux(gmesh, control, p, false);
     TPZCompMeshTools::AddHDivPyramidRestraints(meshvec[0]);
     //    ProjectFlux(meshvec[0]);
     
@@ -3120,7 +2799,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid)
     }
 }
 
-void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
+void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux, bool DisconnectedQ)
 {
     meshvec[0]->Reference()->ResetReference();
     meshvec[0]->LoadReferences();
@@ -3140,13 +2819,11 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         }
         TPZConnect &c = cel->Connect(0);
         bool hasdependency = c.HasDependency();
-//        if (!c.HasDependency()) {
-//            DebugStop();
-//        }
+
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
         intel->PRefine(2*pFlux);
         TPZCompElSide large;
-//        cel->SetIntegrationRule(2*pFlux);
+
         
         if(hasdependency)
         {
@@ -3168,35 +2845,13 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         c.SetNShape(nshape);
         int64_t seqnum = c.SequenceNumber();
         meshvec[0]->Block().Set(seqnum, nshape);
-        if(hasdependency)
+        if(hasdependency and DisconnectedQ == false)
         {
             TPZInterpolatedElement *largeintel = dynamic_cast<TPZInterpolatedElement *>(large.Element());
             intel->RestrainSide(10, largeintel, large.Side());
         }
-        //c.FirstDepend()->fDepMatrix.Print(std::cout);
     }
     meshvec[0]->ExpandSolution();
-    meshvec[1]->Reference()->ResetReference();
-    nel = meshvec[1]->NElements();
-    for (int64_t el=0; el<nel; el++) {
-        TPZCompEl *cel = meshvec[1]->Element(el);
-        if (!cel) {
-            continue;
-        }
-        TPZGeoEl *gel = cel->Reference();
-        if (!gel || gel->Type() != ETetraedro || !gel->Father()) {
-            continue;
-        }
-        // we have a tetrahedra with father
-        if (gel->Father()->Type() != EPiramide) {
-            continue;
-        }
-        
-        TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
-        intel->PRefine(2*pFlux);
-//        cel->SetIntegrationRule(2*pFlux);
-    }
-    meshvec[1]->ExpandSolution();
 }
 
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName)

@@ -59,10 +59,15 @@ endif()
 file(GLOB headers *.h)
 file(GLOB sources *.cpp)
 
-set(main_SRCS ${sources} ${headers})
+set(main_PyramidHdiv TSimulationControl.h TSimulationControl.cpp PyramidHdivTests.cpp)
 
-add_executable(PyramidHdivTests ${main_SRCS})
+set(main_HdivProjection TSimulationControl.h TSimulationControl.cpp HdivProjectionTest.cpp)
+
+add_executable(PyramidHdivTests ${main_PyramidHdiv})
 target_link_libraries(PyramidHdivTests pz)
+
+add_executable(HdivProjectionTests ${main_HdivProjection})
+target_link_libraries(HdivProjectionTests pz)
 
 configure_file(testsequence.txt testsequence.txt COPYONLY)
 
