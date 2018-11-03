@@ -121,13 +121,13 @@ int gIntegrationOrder = 5;
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
-#define Solution_Sine
+//#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-//#define Solution_Dupuit_Thiem
+#define Solution_Dupuit_Thiem
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -544,12 +544,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
             solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
             std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
 #endif
-            
+
             UnwrapMesh(cmeshMult);
             an.LoadSolution();
             cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
             TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
-            
             std::cout << "Solved!" << std::endl;
             
 //            {
@@ -683,7 +682,7 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
             type = "Conformal tetrahedral mesh.";
             break;
         case EHexaHedra:
-            type = "Conformal tetrahedral mesh.";
+            type = "Conformal hexahedral mesh.";
             break;
         default:
             DebugStop();
@@ -1917,12 +1916,12 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
                 
                 mat->SetForcingFunction(bodyforce);
             }
-//            {
-//                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
-//                analytic_f->SetPolynomialOrder(gIntegrationOrder);
-//                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
-//                mat->SetForcingFunctionExact(analytic);
-//            }
+            {
+                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
+                analytic_f->SetPolynomialOrder(gIntegrationOrder);
+                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
+                mat->SetForcingFunctionExact(analytic);
+            }
             //inserindo o material na malha computacional
             mphysics->InsertMaterialObject(mat);
             
