@@ -321,6 +321,8 @@ TPZGeoMesh * GeometryConstruction(int n_h_ref_level, TSimulationControl * sim_co
 
 void UnwrapMesh(TPZCompMesh *cmesh);
 
+std::string PyramidApproxSpaceType(TSimulationControl * control);
+
 int integer_power(int base, unsigned int exp){
     
     if (exp == 0)
@@ -368,6 +370,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     
     std::ofstream output("convergence_summary.txt",std::ios::app);
+    output << std::endl;
+    output << "Approximation space type = " << PyramidApproxSpaceType(sim_control) << std::endl;
+    output << "TSimulation control used :" << std::endl;
+    sim_control->Print(output);
+    output << std::endl;
     
 #ifdef LOG4CXX
     if (logger->isDebugEnabled()) {
@@ -652,15 +659,35 @@ int ComputeApproximation(TSimulationControl * sim_control)
     }// n_p_levels
     
     output << std::endl;
-    output << "TSimulation control used :" << std::endl;
-    sim_control->Print(output);
-    output << std::endl;
-    output << std::endl;
     output << " ------------------------------------------------------------------ " << std::endl;
     output.flush();
     
     return 0;
 
+}
+
+std::string PyramidApproxSpaceType(TSimulationControl * control){
+    
+    std::string type;
+    EApproxSpace run_type = control->m_run_type;
+    switch (run_type) {
+        case EPyramid:
+            type = "Non-conformal pyramid divided in two tetrahedra.";
+            break;
+        case EDividedPyramid4:
+            type = "Non-conformal pyramid divided in four tetrahedra.";
+            break;
+        case EDividedPyramidIncreasedOrder:
+            type = "Conformal pyramid divided in two tetrahedra.";
+            break;
+        case EDividedPyramidIncreasedOrder4:
+            type = "Conformal pyramid divided in four tetrahedra.";
+            break;
+        default:
+            DebugStop();
+            break;
+    }
+    return type;
 }
 
 void ProjectAnalyticalSolution(TPZManVector<TPZCompMesh*,2> & mesh_vector){
