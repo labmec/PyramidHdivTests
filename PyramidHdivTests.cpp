@@ -409,7 +409,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     TPZManVector<REAL,20> dual_error(n_h_levels+1,0.);
     TPZManVector<REAL,20> div_error(n_h_levels+1,0.);
     
-    for (int p = 1; p <= n_p_levels; p++) {
+    for (int p = n_p_levels; p <= n_p_levels; p++) {
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
@@ -596,8 +596,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             
             int h_level = i;
-            int ndof = cmeshMult->Solution().Rows();
-            int ndof_cond = cmeshMult->NEquations();
+            int ndof = cmeshMult->NEquations();
+            int ndof_cond = cmeshMult->NEquations(); // Because condensation is not working properly
             REAL h = 1./REAL(n_elements);
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
