@@ -371,8 +371,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     
     std::ofstream output("convergence_summary.txt",std::ios::app);
     output << std::endl;
-    output << "Approximation space type = " << PyramidApproxSpaceType(sim_control) << std::endl;
-    output << "TSimulation control used :" << std::endl;
+    output << "Approximation space type : " << PyramidApproxSpaceType(sim_control) << std::endl;
+    output << "TSimulation control used : " << std::endl;
     sim_control->Print(output);
     output << std::endl;
     
@@ -416,7 +416,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     TPZManVector<REAL,20> dual_error(n_h_levels+1,0.);
     TPZManVector<REAL,20> div_error(n_h_levels+1,0.);
     
-    for (int p = n_p_levels; p <= n_p_levels; p++) {
+    for (int p = 1; p <= n_p_levels; p++) {
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
@@ -496,10 +496,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 LOGPZ_DEBUG(logger, sout.str())
             }
 #endif
-            {
-                std::ofstream sout("cmesh.txt");
-                cmeshMult->Print(sout);
-            }
             cmeshMult->CleanUpUnconnectedNodes();
 
             
