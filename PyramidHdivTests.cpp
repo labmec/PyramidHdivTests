@@ -121,13 +121,13 @@ int gIntegrationOrder = 5;
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
-#define Solution_Sine
+//#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-//#define Solution_Dupuit_Thiem
+#define Solution_Dupuit_Thiem
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -393,8 +393,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = false;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -678,6 +678,12 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
             break;
         case EDividedPyramidIncreasedOrder4:
             type = "Conformal pyramid divided in four tetrahedra.";
+            break;
+        case ETetrahedra:
+            type = "Conformal tetrahedral mesh.";
+            break;
+        case EHexaHedra:
+            type = "Conformal tetrahedral mesh.";
             break;
         default:
             DebugStop();
