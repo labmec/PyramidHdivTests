@@ -384,7 +384,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     const int dim = 3;
     
     /// Hard code controls
-    bool should_renumber_Q = false;
+    bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
@@ -437,6 +437,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 IncreasePyramidSonOrder(meshvecOrig,p);
             }
             
+//            ProjectAnalyticalSolution(meshvecOrig);
+            
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
             {
@@ -469,12 +471,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             else
             {
             
-                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-                std::cout << "Created grouped elements\n";
-                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-                std::cout << "Created condensed elements\n";
-                cmeshMultOrig->CleanUpUnconnectedNodes();
-                cmeshMultOrig->ExpandSolution();
+//                TPZCompMeshTools::GroupElements(cmeshMultOrig);
+//                std::cout << "Created grouped elements\n";
+//                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+//                std::cout << "Created condensed elements\n";
+//                cmeshMultOrig->CleanUpUnconnectedNodes();
+//                cmeshMultOrig->ExpandSolution();
                 
                 cmeshMult = cmeshMultOrig;
                 meshvec = meshvecOrig;
@@ -549,11 +551,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
             
 //            {
 //                an.AssembleResidual();
-////                {
-////                    std::ofstream out("res_by_el.txt");
-////                    an.PrintVectorByElement(out, an.Rhs(),1.0e-5);
-////                }
-////                an.Rhs().Print("r = ",std::cout,EMathematicaInput);
 //                REAL norm = Norm(an.Rhs());
 //                std::cout << "Residual norm = " << norm << std::endl;
 //
@@ -689,15 +686,15 @@ void ProjectAnalyticalSolution(TPZManVector<TPZCompMesh*,2> & mesh_vector){
         an.SetSolver(step);
         an.Assemble();
         an.Solve();
-        
-        std::cout << "Flux Post-processing..." << std::endl;
-        TPZStack<std::string> scalnames, vecnames;
-        vecnames.Push("Solution");
-        std::string plotfile = "Projected_flux.vtk";
-        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-        
-        int postprocessresolution = 0;
-        an.PostProcess(postprocessresolution);
+        an.LoadSolution();
+//        std::cout << "Flux Post-processing..." << std::endl;
+//        TPZStack<std::string> scalnames, vecnames;
+//        vecnames.Push("Solution");
+//        std::string plotfile = "Projected_flux.vtk";
+//        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+//
+//        int postprocessresolution = 0;
+//        an.PostProcess(postprocessresolution);
         
     }
 
@@ -712,14 +709,15 @@ void ProjectAnalyticalSolution(TPZManVector<TPZCompMesh*,2> & mesh_vector){
         an.SetSolver(step);
         an.Assemble();
         an.Solve();
-        std::cout << "Pressure Post-processing..." << std::endl;
-        TPZStack<std::string> scalnames, vecnames;
-        scalnames.Push("Solution");
-        std::string plotfile = "Projected_pressure.vtk";
-        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-        
-        int postprocessresolution = 0;
-        an.PostProcess(postprocessresolution);
+        an.LoadSolution();
+//        std::cout << "Pressure Post-processing..." << std::endl;
+//        TPZStack<std::string> scalnames, vecnames;
+//        scalnames.Push("Solution");
+//        std::string plotfile = "Projected_pressure.vtk";
+//        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+//
+//        int postprocessresolution = 0;
+//        an.PostProcess(postprocessresolution);
     }
     
 }
@@ -852,11 +850,10 @@ void CheckNormalContinuity(TPZCompElSide & small, TPZCompElSide & large){
         var_norm = sqrt(var_norm);
         x_norm = sqrt(x_norm);
         
-        CompareShapeFunctions(small, x_hat_vol, large.Element(), x_hat_vol_large, normal);
         bool check_Q = (var_norm < eps) and  (x_norm < eps);
         if (not check_Q) {
             std::cout << "ok the flux is not continuous. " << std::endl;
-            
+            CompareShapeFunctions(small, x_hat_vol, large.Element(), x_hat_vol_large, normal);
             DebugStop();
         }
         
@@ -892,27 +889,27 @@ void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv
     
     TPZFMatrix<REAL> fluxes;
     data_hdiv.ComputeFluxValues(fluxes);
-    {
-        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
-        TPZManVector<int,20> order(15,6);
-        TPZManVector<int64_t,4> id(4,4);
-        for (int i = 0; i < 4; i++) {
-            id[i] = cel_hdiv->Reference()->NodePtr(i)->Id();
-        }
-        pzshape::TPZShapeTetra::Shape(xi_hdiv, id, order, phi, dphi);
-        int aka = 0;
-    }
-    
-    {
-        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
-        TPZManVector<int,20> order(15,6);
-        TPZManVector<int64_t,4> id(3,3);
-        for (int i = 0; i < 3; i++) {
-            id[i] = cel_bound->Reference()->NodePtr(i)->Id();
-        }
-        pzshape::TPZShapeTriang::Shape(xi_bound, id, order, phi, dphi);
-        int aka = 0;
-    }
+//    {
+//        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
+//        TPZManVector<int,20> order(15,6);
+//        TPZManVector<int64_t,4> id(4,4);
+//        for (int i = 0; i < 4; i++) {
+//            id[i] = cel_hdiv->Reference()->NodePtr(i)->Id();
+//        }
+//        pzshape::TPZShapeTetra::Shape(xi_hdiv, id, order, phi, dphi);
+//        int aka = 0;
+//    }
+//
+//    {
+//        TPZFNMatrix<200,REAL> phi(100,1,-1),dphi(3,100);
+//        TPZManVector<int,20> order(15,6);
+//        TPZManVector<int64_t,4> id(3,3);
+//        for (int i = 0; i < 3; i++) {
+//            id[i] = cel_bound->Reference()->NodePtr(i)->Id();
+//        }
+//        pzshape::TPZShapeTriang::Shape(xi_bound, id, order, phi, dphi);
+//        int aka = 0;
+//    }
     
     // compute the difference
     int n_shape = data_bound.phi.Rows();
@@ -924,7 +921,6 @@ void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv
         int vec_index = data_hdiv.fVecShapeIndex[first_shape + i].first;
         int shape_index = data_hdiv.fVecShapeIndex[first_shape + i].second;
         phi_s(i,0) = data_hdiv.phi(shape_index,0);
-//        std::cout << "shape_index = " << shape_index << std::endl;
         for (int k = 0; k < 3; k++) {
             normal_component(i,0) += data_hdiv.fNormalVec(k,vec_index)* normal[k];
             flux_normal(i,0) += fluxes(k,first_shape + i) * normal[k];
@@ -932,7 +928,6 @@ void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv
 
         diff_accum += (flux_normal(i,0) - data_bound.phi(i,0))*(flux_normal(i,0) - data_bound.phi(i,0));
     }
-//    normal_component.Print("Normal Component = ",std::cout);
     
     diff_accum/=n_shape;
     diff_accum = sqrt(diff_accum);
@@ -1893,12 +1888,12 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
                 
                 mat->SetForcingFunction(bodyforce);
             }
-            {
-                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
-                analytic_f->SetPolynomialOrder(gIntegrationOrder);
-                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
-                mat->SetForcingFunctionExact(analytic);
-            }
+//            {
+//                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
+//                analytic_f->SetPolynomialOrder(gIntegrationOrder);
+//                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
+//                mat->SetForcingFunctionExact(analytic);
+//            }
             //inserindo o material na malha computacional
             mphysics->InsertMaterialObject(mat);
             
@@ -3113,13 +3108,10 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         }
         TPZConnect &c = cel->Connect(0);
         bool hasdependency = c.HasDependency();
-//        if (!c.HasDependency()) {
-//            DebugStop();
-//        }
+
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
         intel->PRefine(2*pFlux);
         TPZCompElSide large;
-//        cel->SetIntegrationRule(2*pFlux);
         
         if(hasdependency)
         {
@@ -3146,7 +3138,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
             TPZInterpolatedElement *largeintel = dynamic_cast<TPZInterpolatedElement *>(large.Element());
             intel->RestrainSide(10, largeintel, large.Side());
         }
-        //c.FirstDepend()->fDepMatrix.Print(std::cout);
+
     }
     meshvec[0]->ExpandSolution();
     meshvec[1]->Reference()->ResetReference();
@@ -3167,7 +3159,6 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
         intel->PRefine(2*pFlux);
-//        cel->SetIntegrationRule(2*pFlux);
     }
     meshvec[1]->ExpandSolution();
 }
