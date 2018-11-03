@@ -77,7 +77,6 @@ using namespace pzshape;
 using namespace std;
 
 
-
 void PrintArrayInMathematica(TPZVec<REAL> &array, std::ofstream &out, std::string arrayName);
 
 void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> &hSizeVec,
@@ -101,12 +100,15 @@ void ProjectFlux(TPZCompMesh *cfluxmesh);
 void GroupElements(TPZCompMesh *cmesh);
 void UniformRefine(TPZGeoMesh* gmesh, int nDiv);
 void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f);
+
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol);
 
 TPZAutoPointer<TPZRefPattern> PyramidRef();
+
 TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra();
 
 void DividePyramids(TPZGeoMesh &gmesh);
+
 void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
 
 void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
@@ -264,8 +266,6 @@ void FluxFunc(const TPZVec<REAL> &pt, TPZVec<STATE> &flux)
     flux[0] = 0.;
 }
 
-
-
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol)
 {
     int dir = 0;
@@ -306,6 +306,8 @@ void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f)
 void CheckNormalContinuity(TPZCompMesh * cmesh);
 
 void CheckNormalContinuity(TPZCompElSide & small, TPZCompElSide & large);
+
+void ProjectAnalyticalSolution(TPZManVector<TPZCompMesh*,2> & mesh_vector);
 
 void CompareShapeFunctions(TPZCompElSide & cel_hdiv_side, TPZVec<REAL> & xi_hdiv, TPZCompEl * cel_bound, TPZVec<REAL> & xi_bound, TPZVec<REAL> & normal);
 
@@ -386,8 +388,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     bool use_pardiso_Q = true;
     const int n_threads_error = 12;
     const int n_threads_assembly = 12;
-//    bool keep_lagrangian_multiplier_Q = true;
-//    bool keep_matrix_Q = false;
+    bool keep_lagrangian_multiplier_Q = true;
+    bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
     
     
@@ -407,7 +409,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     TPZManVector<REAL,20> dual_error(n_h_levels+1,0.);
     TPZManVector<REAL,20> div_error(n_h_levels+1,0.);
     
-    for (int p = n_p_levels; p <= n_p_levels; p++) {
+    for (int p = 1; p <= n_p_levels; p++) {
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
@@ -435,74 +437,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 IncreasePyramidSonOrder(meshvecOrig,p);
             }
             
-            {
-                
-//                for (auto &ic: meshvecOrig[0]->ConnectVec()) {
-//                    ic.RemoveDepend();
-//                }
-                std::ofstream flux_file("flux_cmesh.txt");
-                meshvecOrig[0]->Print(flux_file);
-            }
-            
-//            {
-//                int mesh_index = 0; // flux projection
-//                TPZAnalysis an(meshvecOrig[mesh_index],false);
-//                TPZStepSolver<STATE> step;
-//                step.SetDirect(ELDLt);
-//                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
-//                sparse.SetNumThreads(n_threads_assembly);
-//                an.SetStructuralMatrix(sparse);
-//                an.SetSolver(step);
-//                an.Assemble();
-//
-//                an.Solve();
-//                if (sim_control->m_draw_vtk_Q) {
-//
-//                    std::cout << "Flux Post-processing..." << std::endl;
-//                    TPZStack<std::string> scalnames, vecnames;
-//                    vecnames.Push("Solution");
-//                    std::string plotfile = "Projected_flux.vtk";
-//                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-//
-//                    int postprocessresolution = 0;
-//                    an.PostProcess(postprocessresolution);
-//
-//                }
-//
-//            }
-            
-            {
-                std::ofstream pressure_file("pressure_cmesh.txt");
-                meshvecOrig[1]->Print(pressure_file);
-            }
-            
-            {
-//                int mesh_index = 1; // pressure projection
-//                TPZAnalysis an(meshvecOrig[mesh_index],false); // Not working when second arg is true
-//                TPZStepSolver<STATE> step;
-//                step.SetDirect(ELDLt);
-//                TPZSymetricSpStructMatrix sparse(meshvecOrig[mesh_index]);
-//                sparse.SetNumThreads(n_threads_assembly);
-//                an.SetStructuralMatrix(sparse);
-//                an.SetSolver(step);
-//                an.Assemble();
-//                an.Solve();
-//                if (sim_control->m_draw_vtk_Q) {
-//
-//                    std::cout << "Pressure Post-processing..." << std::endl;
-//                    TPZStack<std::string> scalnames, vecnames;
-//                    scalnames.Push("Solution");
-//                    std::string plotfile = "Projected_pressure.vtk";
-//                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
-//
-//                    int postprocessresolution = 0;
-//                    an.PostProcess(postprocessresolution);
-//
-//                }
-                
-            }
-
-            
 #ifdef LOG4CXX
             if (logger->isDebugEnabled())
             {
@@ -520,29 +454,27 @@ int ComputeApproximation(TSimulationControl * sim_control)
             bool hybrid = false;
             if(hybrid)
             {
-//                TPZCompMesh *cmeshMultHybrid = 0;
-//                TPZManVector<TPZCompMesh *,2> meshvecHybrid(2,0);
                 TPZHybridizeHDiv hybrid;
                 std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
                 chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
                 TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
                 TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-//                hybrid.GroupElements(cmeshMultHybrid);
+                hybrid.GroupElements(cmeshMultHybrid);
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
                 
-                CheckNormalContinuity(meshvec[0]);
+//                CheckNormalContinuity(meshvec[0]);
                 
             }
             else
             {
             
-//                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-//                std::cout << "Created grouped elements\n";
-//                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-//                std::cout << "Created condensed elements\n";
-//                cmeshMultOrig->CleanUpUnconnectedNodes();
-//                cmeshMultOrig->ExpandSolution();
+                TPZCompMeshTools::GroupElements(cmeshMultOrig);
+                std::cout << "Created grouped elements\n";
+                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                std::cout << "Created condensed elements\n";
+                cmeshMultOrig->CleanUpUnconnectedNodes();
+                cmeshMultOrig->ExpandSolution();
                 
                 cmeshMult = cmeshMultOrig;
                 meshvec = meshvecOrig;
@@ -585,7 +517,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
 #endif
             // ------------------ Assembling -------------------
-//            an.Assemble();
+            an.Assemble();
 #ifdef USING_BOOST
             boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
             assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
@@ -600,7 +532,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
-//            an.Solve();
+            an.Solve();
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
@@ -610,22 +542,22 @@ int ComputeApproximation(TSimulationControl * sim_control)
             
             UnwrapMesh(cmeshMult);
             an.LoadSolution();
-//            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
             TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
             
             std::cout << "Solved!" << std::endl;
             
-            {
-                an.AssembleResidual();
-//                {
-//                    std::ofstream out("res_by_el.txt");
-//                    an.PrintVectorByElement(out, an.Rhs(),1.0e-5);
-//                }
-//                an.Rhs().Print("r = ",std::cout,EMathematicaInput);
-                REAL norm = Norm(an.Rhs());
-                std::cout << "Residual norm = " << norm << std::endl;
-                
-            }
+//            {
+//                an.AssembleResidual();
+////                {
+////                    std::ofstream out("res_by_el.txt");
+////                    an.PrintVectorByElement(out, an.Rhs(),1.0e-5);
+////                }
+////                an.Rhs().Print("r = ",std::cout,EMathematicaInput);
+//                REAL norm = Norm(an.Rhs());
+//                std::cout << "Residual norm = " << norm << std::endl;
+//
+//            }
             
             // ------------------ Post Processing VTK -------------------
             if (sim_control->m_draw_vtk_Q) {
@@ -730,25 +662,66 @@ int ComputeApproximation(TSimulationControl * sim_control)
     output << " ------------------------------------------------------------------ " << std::endl;
     output.flush();
     
-//    std::string mathematicaFilename = "NoName.nb";
-//    std::stringstream Mathsout;
-//    if(run_type == ETetrahedra){Mathsout << "convergenceRatesTetMesh";}
-//    if(run_type == EPyramid){Mathsout << "convergenceRatesPyrMesh";}
-//    if(run_type == EDividedPyramid){Mathsout << "convergenceRatesDividedPyrMesh";}
-//    if(run_type == EDividedPyramidIncreasedOrder){Mathsout << "convergenceRatesDivPyrIncOrdMesh";}
-//    if(run_type == EDividedPyramid4){Mathsout << "convergenceRatesDividedPyr4Mesh";}
-//    if(run_type == EDividedPyramidIncreasedOrder4){Mathsout << "convergenceRatesDivPyr4IncOrdMesh";}
-//    Mathsout << sim_control->m_approx_order;
-//    if (hdiv_pp_Q) {
-//        Mathsout << "plusplus";
-//    }
-//    Mathsout << ".nb";
-//    mathematicaFilename = Mathsout.str();
-//    GenerateMathematicaWithConvergenceRates(neqVec,hSizeVec,h1ErrVec,l2ErrVec,semih1ErrVec,sim_control);
-//    std::cout << "Code finished! file " << mathematicaFilename << " written" << std::endl;
-    
     return 0;
 
+}
+
+void ProjectAnalyticalSolution(TPZManVector<TPZCompMesh*,2> & mesh_vector){
+    
+    {
+        std::ofstream flux_file("flux_cmesh.txt");
+        mesh_vector[0]->Print(flux_file);
+        
+        std::ofstream pressure_file("pressure_cmesh.txt");
+        mesh_vector[1]->Print(pressure_file);
+    }
+    
+    int dim = 3;
+    int n_threads_assembly = 12;
+    {
+        int mesh_index = 0; // flux projection
+        TPZAnalysis an(mesh_vector[mesh_index],false);
+        TPZStepSolver<STATE> step;
+        step.SetDirect(ELDLt);
+        TPZSymetricSpStructMatrix sparse(mesh_vector[mesh_index]);
+        sparse.SetNumThreads(n_threads_assembly);
+        an.SetStructuralMatrix(sparse);
+        an.SetSolver(step);
+        an.Assemble();
+        an.Solve();
+        
+        std::cout << "Flux Post-processing..." << std::endl;
+        TPZStack<std::string> scalnames, vecnames;
+        vecnames.Push("Solution");
+        std::string plotfile = "Projected_flux.vtk";
+        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+        
+        int postprocessresolution = 0;
+        an.PostProcess(postprocessresolution);
+        
+    }
+
+    {
+        int mesh_index = 1; // pressure projection
+        TPZAnalysis an(mesh_vector[mesh_index],false); // Not working when second arg is true
+        TPZStepSolver<STATE> step;
+        step.SetDirect(ELDLt);
+        TPZSymetricSpStructMatrix sparse(mesh_vector[mesh_index]);
+        sparse.SetNumThreads(n_threads_assembly);
+        an.SetStructuralMatrix(sparse);
+        an.SetSolver(step);
+        an.Assemble();
+        an.Solve();
+        std::cout << "Pressure Post-processing..." << std::endl;
+        TPZStack<std::string> scalnames, vecnames;
+        scalnames.Push("Solution");
+        std::string plotfile = "Projected_pressure.vtk";
+        an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+        
+        int postprocessresolution = 0;
+        an.PostProcess(postprocessresolution);
+    }
+    
 }
 
 void CheckNormalContinuity(TPZCompMesh * cmesh){
