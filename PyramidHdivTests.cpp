@@ -121,13 +121,13 @@ int gIntegrationOrder = 5;
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
-//#define Solution_Sine
+#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-#define Solution_Dupuit_Thiem
+//#define Solution_Dupuit_Thiem
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -335,6 +335,8 @@ int integer_power(int base, unsigned int exp){
     
 }
 
+void TestingCondensation();
+
 int main(int argc, char *argv[])
 {
     /// Global controls
@@ -347,6 +349,9 @@ int main(int argc, char *argv[])
 //    FileName += "pyramlogfile.cfg";
     InitializePZLOG();
 #endif
+    
+//    TestingCondensation();
+//    return 0;
     
     TSimulationControl * sim_control = NULL;
     if(argc != 7){
@@ -364,6 +369,116 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+void TestingCondensation(){
+    
+    
+    TPZMatRed<STATE, TPZFMatrix<STATE> > fCondensed(10,5);
+    fCondensed.Zero();
+    TPZAutoPointer<TPZMatrix<STATE> > K00_ini = new TPZFMatrix<STATE>(5,5);
+    fCondensed.SetK00(K00_ini);
+    
+    int64_t dim0 = fCondensed.Dim0();
+    int64_t dim1 = fCondensed.Dim1();
+    int64_t rows = fCondensed.Rows();
+    int64_t cols = fCondensed.Cols()+1;
+    
+    TPZFMatrix<STATE> ef(rows,1,10);
+    fCondensed.SetF(ef);
+    
+    // Prencher the Matrix
+    // Devloo
+    unsigned int n = fCondensed.Rows();
+    for (unsigned int i = 0; i < n; i++) {
+        for (unsigned int j = 0; j < n; j++) {
+            fCondensed(i,j) = (1.0/((i+j+2)*(i+j+2)));
+        }
+        fCondensed(i,i) += 1.0;
+    }
+    
+    {// Initialization for pivot structure
+        TPZFMatrix<STATE> * K00_temp = dynamic_cast<TPZFMatrix<STATE> * >(fCondensed.K00().operator->());
+        K00_temp->InitializePivot();
+    }
+
+    TPZFMatrix<STATE> KF(rows,cols); //  Local object
+    for(int64_t i=0; i<rows;i++) //
+        for (int64_t j=0; j<cols; j++)
+        {
+            if (j<rows)
+                KF(i,j) = fCondensed(i,j);
+            else
+                KF(i,j) = ef(i,j-rows);
+        }
+    
+    for (int64_t i=0; i<dim1; i++) //
+        for (int64_t j=0; j<dim0; j++)
+            fCondensed.K10().operator()(i,j)=KF(i+dim0,j);
+    
+    for (int64_t i=0; i<dim1; i++) //
+        for (int64_t j=0; j<dim1; j++)
+            fCondensed(i+dim0,j+dim0)=KF(i+dim0,j+dim0);
+    
+    fCondensed.SetF(ef);
+    
+    // LDLt Decomposition
+    for (int64_t i=0; i<rows-dim1; i++)
+    {
+        for(int64_t j=i+1;j<cols;j++)
+        {
+            if (j<rows)
+            {
+                KF(j,i)/=KF(i,i);
+                KF(i,j)/=KF(i,i);
+            }
+            else
+                KF(i,j)/=KF(i,i);
+        }
+        
+#ifdef STATEdouble
+        cblas_dger (CblasColMajor, rows-i-1, cols-i-1,
+                    -KF(i,i), &KF(i+1,i), 1,
+                    &KF(i,i+1), rows, &KF(i+1,i+1), rows);
+#else
+        DebugStop();
+#endif
+    }
+    
+    for (int64_t i=dim0; i< rows; i++)
+    {
+        ef(i,0) = KF.GetVal(i,fCondensed.Rows());
+        for (int64_t j=dim0; j< fCondensed.Rows(); j++)
+        {
+            fCondensed(i,j) = KF.GetVal(i,j);
+        }
+    }
+    
+    TPZAutoPointer<TPZMatrix<STATE> > K00 = fCondensed.K00();
+    for (int64_t i=0; i<dim0; i++)
+        for (int64_t j=0; j<dim0; j++)
+            K00->operator()(i, j) = KF(i,j);
+
+    fCondensed.K00()->SetIsDecomposed(ELDLt);
+    
+//    if(0){
+//
+//        for (int64_t i=0; i<dim0; i++){ // Substituindo valores obtidos para K01 usando o BLAS
+//            for (int64_t j=0; j<dim1; j++){
+//                fCondensed.K01().operator()(i,j) = KF(i,j+dim0)/KF(i,i);
+//            }
+//
+//        }
+//
+//        double scale = 1.0;
+//        cblas_dtrsm(CblasColMajor,CblasLeft,CblasUpper,CblasNoTrans,CblasUnit,dim0,dim1,scale,&fCondensed.K00().operator->()->operator()(0,0),dim0,&fCondensed.K01()(0,0),dim0);
+//    }else{
+    fCondensed.K00()->SolveDirect(fCondensed.K01(), ELDLt);
+//    }
+    fCondensed.SetF(ef);
+    fCondensed.SetK01IsComputed(true);
+    fCondensed.SetfF0IsComputed(true);
+    fCondensed.SetReduced();// Directive that instructs the object to behave as reduced matrix.
+    fCondensed.Print("Condensed = ",std::cout);
+}
 
 int ComputeApproximation(TSimulationControl * sim_control)
 {
@@ -394,7 +509,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
     const int n_threads_error = 12;
-    const int n_threads_assembly = 12;
+    const int n_threads_assembly = 0;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -478,12 +593,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             else
             {
             
-//                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-//                std::cout << "Created grouped elements\n";
-//                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-//                std::cout << "Created condensed elements\n";
-//                cmeshMultOrig->CleanUpUnconnectedNodes();
-//                cmeshMultOrig->ExpandSolution();
+                TPZCompMeshTools::GroupElements(cmeshMultOrig);
+                std::cout << "Created grouped elements\n";
+                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                std::cout << "Created condensed elements\n";
+                cmeshMultOrig->CleanUpUnconnectedNodes();
+                cmeshMultOrig->ExpandSolution();
                 
                 cmeshMult = cmeshMultOrig;
                 meshvec = meshvecOrig;
