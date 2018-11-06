@@ -98,7 +98,7 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
 void LoadSolution(TPZCompMesh *cpressure);
 void ProjectFlux(TPZCompMesh *cfluxmesh);
 void GroupElements(TPZCompMesh *cmesh);
-void UniformRefine(TPZGeoMesh* gmesh, int nDiv);
+void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv);
 void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f);
 
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol);
@@ -121,13 +121,13 @@ int gIntegrationOrder = 5;
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
-#define Solution_Sine
+//#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-//#define Solution_Dupuit_Thiem
+#define Solution_Dupuit_Thiem
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -335,6 +335,8 @@ int integer_power(int base, unsigned int exp){
     
 }
 
+void FlipPyramids(TPZGeoMesh * gmesh);
+
 void TestingCondensation();
 
 int main(int argc, char *argv[])
@@ -512,8 +514,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -587,11 +589,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
                 TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
                 TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-                hybrid.GroupElements(cmeshMultHybrid);
+//                hybrid.GroupElements(cmeshMultHybrid);
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
                 
-//                CheckNormalContinuity(meshvec[0]);
+                CheckNormalContinuity(meshvec[0]);
                 
             }
             else
@@ -779,7 +781,7 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
     std::string type;
     EApproxSpace run_type = control->m_run_type;
     switch (run_type) {
-        case EPyramid:
+        case EDividedPyramid:
             type = "Non-conformal pyramid divided in two tetrahedra.";
             break;
         case EDividedPyramid4:
@@ -1143,8 +1145,6 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             std::string gmsh_file("vertical_wellbore_He.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
-            // ------------------ Uniform Refining -------------------
-            UniformRefine(gmesh, h_ref_level);
         }
             break;
         case EVerticalWellTe:{
@@ -1154,8 +1154,6 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             std::string gmsh_file("vertical_wellbore_Te.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
-            // ------------------ Uniform Refining -------------------
-            UniformRefine(gmesh, h_ref_level);
         }
             break;
         case EVerticalWellHePyTe:{
@@ -1165,12 +1163,35 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
-            // ------------------ Uniform Refining -------------------
-            UniformRefine(gmesh, h_ref_level);
         }
             break;
         default:
             break;
+    }
+    
+    if (sim_control->m_geometry_type!=EAcademic) {
+        // ------------------ Uniform Refining -------------------
+        UniformRefineOnVolumetricElements(gmesh, h_ref_level);
+//        int volumetric_id = 1;
+//        DivideBoundaryElements(*gmesh,volumetric_id);
+        
+//        // ------------------ Directional Refining -------------------
+//        set<int> SetMatsRefDir;
+//        int bc_inner_boundary = 3;
+//        SetMatsRefDir.insert(bc_inner_boundary);
+//        for(int j = 0; j < h_ref_level; j++)
+//        {
+//            int nel = gmesh->NElements();
+//            for (int iref = 0; iref < nel; iref++)
+//            {
+//                TPZVec<TPZGeoEl*> filhos;
+//                TPZGeoEl * gelP2 = gmesh->ElementVec()[iref];
+//                if(!gelP2 || gelP2->HasSubElement()) continue;
+//                TPZRefPatternTools::RefineDirectional(gelP2, SetMatsRefDir);
+//
+//            }
+//        }
+//        SetMatsRefDir.clear();
     }
     
 #ifdef PZDEBUG
@@ -1191,6 +1212,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
        run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
     {
+        FlipPyramids(gmesh);
         DividePyramids(*gmesh);
         DivideBoundaryElements(*gmesh);
     }
@@ -1204,6 +1226,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     }
 #endif
     
+//    gmesh->BuildConnectivity();
     
 #ifdef LOG4CXX
     if(logger->isDebugEnabled())
@@ -1217,6 +1240,55 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     return gmesh;
 }
 
+void FlipPyramids(TPZGeoMesh * gmesh){
+    
+    // Pyramids With Common Quadrilateral Faces
+    int geo_dim = gmesh->Dimension();
+    int n_el = gmesh->NElements();
+    std::vector<int> pyramid_indexes;
+    for (unsigned int iel = 0; iel < n_el; iel++) {
+        TPZGeoEl * gel = gmesh->Element(iel);
+        if (!gel || gel->Dimension() != geo_dim || gel->HasSubElement() || gel->Type() != EPiramide) {
+            continue;
+        }
+        pyramid_indexes.push_back(gel->Index());
+    }
+    
+    std::map<int, int> left_right_pyramid_map;
+//    int n_pyramids = pyramid_indexes.size();
+    for (auto ipyramid: pyramid_indexes) {
+        TPZGeoEl * gel = gmesh->Element(ipyramid);
+        TPZGeoElSide gel_side(gel,13);
+        TPZStack<TPZGeoElSide> allneigh;
+        gel_side.AllNeighbours(allneigh);
+        int n_neighs = allneigh.size();
+        if(n_neighs != 1){
+            continue;
+        }
+        TPZGeoEl * gel_neigh = allneigh[0].Element();
+        if(gel_neigh->Type()!=EPiramide){
+            continue;
+        }
+        left_right_pyramid_map[gel->Index()] = gel_neigh->Index();
+    }
+    
+//    int n_pairs = left_right_pyramid_map.size();
+    // Flip Right Pyramids
+    for (auto ipair: left_right_pyramid_map) {
+        TPZGeoEl * gel_left     = gmesh->Element(ipair.first);
+        TPZGeoEl * gel_right    = gmesh->Element(ipair.second);
+        TPZVec<int64_t> left_node_indexes,right_node_indexes;
+        gel_left->GetNodeIndices(left_node_indexes);
+        gel_right->GetNodeIndices(right_node_indexes);
+        for (int i = 0; i < 4; i++) {
+            right_node_indexes[i] = left_node_indexes[i];
+            gel_right->SetNodeIndex(i, left_node_indexes[i]);
+        }
+        
+    }
+//    gmesh->BuildConnectivity();
+    
+}
 
 void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm, TSimulationControl * control);
 
@@ -1301,7 +1373,8 @@ void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm
     //    TPZGeoMesh *gmesh = CreateGeoMesh1Tet();
     //    TPZGeoMesh *gmesh = CreateGeoMeshPrism();
     
-    UniformRefine(gmesh, nref);
+    UniformRefineOnVolumetricElements(gmesh, nref);
+    DebugStop();
     
 #ifdef LOG4CXX
     if(logger->isDebugEnabled() && nref < 2)
@@ -2475,8 +2548,9 @@ void InsertElasticityCubo(TPZCompMesh *mesh)
     mesh->InsertMaterialObject(bcauto3);
 }
 
-void UniformRefine(TPZGeoMesh* gmesh, int nDiv)
+void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv)
 {
+//    int geometry_dim = gmesh->Dimension();
     for(int D = 0; D < nDiv; D++)
     {
         int nels = gmesh->NElements();
@@ -2484,12 +2558,18 @@ void UniformRefine(TPZGeoMesh* gmesh, int nDiv)
         {
             TPZVec< TPZGeoEl * > filhos;
             TPZGeoEl * gel = gmesh->ElementVec()[elem];
+//            if (!gel || gel->HasSubElement()) {
+//                continue;
+//            }
             gel->Divide(filhos);
         }
     }
-    // Re-constructing connectivities
-    //    gmesh->ResetConnectivities();
-    //    gmesh->BuildConnectivity();
+    
+////    gmesh->Ad
+//    if(nDiv != 0){
+//        int mat_volumetric_id = 1;
+//        DivideBoundaryElements(*gmesh,mat_volumetric_id);
+//    }
 }
 
 void GroupElements(TPZCompMesh *cmesh)
@@ -2948,7 +3028,8 @@ void VerifyDRhamCompatibility(TSimulationControl * control)
     HDivPiola = 1;
     TPZGeoMesh *gmesh = CreateGeoMesh1Pir();
     int nref = 0;
-    UniformRefine(gmesh, nref);
+    UniformRefineOnVolumetricElements(gmesh, nref);
+    DebugStop();
     {
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, "../PyramidGMesh.vtk", true);
     }
@@ -3140,50 +3221,11 @@ void DividePyramids(TPZGeoMesh &gmesh)
         DebugStop();
     }
     int64_t nel = gmesh.NElements();
-    int meshdim = gmesh.Dimension();
     for (int64_t el=0; el<nel; el++) {
         TPZGeoEl *gel = gmesh.Element(el);
         if (!gel || gel->Type() != EPiramide || gel->HasSubElement()) {
             continue;
         }
-//        // an element on the quadrilateral face
-//        int quadrilateral_side = 13;
-//        TPZGeoElSide gelside(gel,quadrilateral_side);
-//        // look for an element divided along the quadrilateral side
-//        TPZGeoElSide neighbour = gelside.Neighbour();
-//        bool hasdividedneighbour = false;
-//        bool hasvolumeneighbour = false;
-//        while (neighbour != gelside) {
-//            if (neighbour.Element()->HasSubElement()) {
-//                hasdividedneighbour = true;
-//            }
-//            if(neighbour.Element()->Dimension() == meshdim)
-//            {
-//                hasvolumeneighbour = true;
-//            }
-//            neighbour = neighbour.Neighbour();
-//        }
-//        if (hasdividedneighbour == true)
-//        {
-//            // find compatible refinement pattern
-//            TPZAutoPointer<TPZRefPattern> compatible;
-//            std::list<TPZAutoPointer<TPZRefPattern> > patlist;
-//            TPZRefPatternTools::GetCompatibleRefPatterns(gel, patlist);
-//            if (patlist.size() != 1) {
-//                DebugStop();
-//            }
-//            compatible = *patlist.begin();
-//            gel->SetRefPattern(compatible);
-//        }
-//        else
-//        {
-//            if(hasvolumeneighbour)
-//            {
-//                TPZGeoElBC(gelside, 3);
-//            }
-//            gel->SetRefPattern(refpat);
-//        }
-        // Create a geometric element along the quadrilateral side
         TPZManVector<TPZGeoEl *,4> subels(4,0);
         gel->SetRefPattern(refpat);
         gel->Divide(subels);
@@ -3198,7 +3240,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid)
     for (int64_t el=0; el<nel; el++) {
         TPZGeoEl *gel = gmesh.Element(el);
         int matid = gel->MaterialId();
-        if (gel->Dimension() != meshdim-1 || matid == exceptmatid) {
+        if (gel->Dimension() != meshdim-1 || matid == exceptmatid || gel->HasSubElement()) {
             continue;
         }
         int nsides = gel->NSides();
