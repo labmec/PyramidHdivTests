@@ -509,7 +509,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
     const int n_threads_error = 12;
-    const int n_threads_assembly = 0;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -654,14 +654,15 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             an.Solve();
             
-            an.Solution().Print("x = ",std::cout,EMathematicaInput);
-            
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
             solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
             std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
 #endif
-
+            // Getting dof information before unwrap the mesh
+            int ndof = meshvecOrig[0]->Solution().Rows()+ meshvecOrig[1]->Solution().Rows();
+            int ndof_cond = cmeshMult->NEquations();
+            
             UnwrapMesh(cmeshMult);
             an.LoadSolution();
             cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
@@ -715,8 +716,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             
             int h_level = i;
-            int ndof = cmeshMult->NEquations();
-            int ndof_cond = cmeshMult->NEquations(); // Because condensation is not working properly
             REAL h = 1./REAL(n_elements);
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
