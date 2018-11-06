@@ -12,7 +12,7 @@ Include "drill_wellbore.geo";
 // Geometry Parameters
 ////////////////////////////////////////////////////////////////
 
-outer_r = 4.0; // reservoir radius
+outer_r = 5.0; // reservoir radius
 inner_r = 0.1; // wellbore radius
 h = 1; // vertical lenght
 s = 10.0; // amplification factor for the wellbore box
@@ -23,7 +23,7 @@ s = 10.0; // amplification factor for the wellbore box
 
 n_radial = 8;
 n_azimuthal = 8; 
-n_vertical = 8;
+n_vertical = 1;
 radial_progression = 1.25;
 
 ////////////////////////////////////////////////////////////////

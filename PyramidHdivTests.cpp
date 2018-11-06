@@ -109,7 +109,7 @@ TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra();
 
 void DividePyramids(TPZGeoMesh &gmesh);
 
-void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux);
+void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control, int pFlux);
 
 void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 
@@ -483,10 +483,14 @@ void TestingCondensation(){
 int ComputeApproximation(TSimulationControl * sim_control)
 {
     
-    
+    std::string e_accuracy_type = "Hdiv";
+    if(sim_control->m_Hdiv_plusplus_Q){
+        e_accuracy_type = "Hdiv++";
+    }
     std::ofstream output("convergence_summary.txt",std::ios::app);
     output << std::endl;
     output << "Approximation space type : " << PyramidApproxSpaceType(sim_control) << std::endl;
+    output << "Enhanced accuracy type : " << e_accuracy_type << std::endl;
     output << "TSimulation control used : " << std::endl;
     sim_control->Print(output);
     output << std::endl;
@@ -508,8 +512,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 12;
-    const int n_threads_assembly = 12;
+    const int n_threads_error = 64;
+    const int n_threads_assembly = 64;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -556,7 +560,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             
             if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
             {
-                IncreasePyramidSonOrder(meshvecOrig,p);
+                IncreasePyramidSonOrder(meshvecOrig,sim_control,p);
             }
             
 //            ProjectAnalyticalSolution(meshvecOrig);
@@ -668,13 +672,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
             cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
             TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
             std::cout << "Solved!" << std::endl;
-            
-//            {
-//                an.AssembleResidual();
-//                REAL norm = Norm(an.Rhs());
-//                std::cout << "Residual norm = " << norm << std::endl;
-//
-//            }
             
             // ------------------ Post Processing VTK -------------------
             if (sim_control->m_draw_vtk_Q) {
@@ -3232,8 +3229,14 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid)
     }
 }
 
-void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
+void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control, int pFlux)
 {
+    
+    int n_accuracy = 0;
+//    if (control->m_Hdiv_plusplus_Q) {
+//        n_accuracy++;
+//    }
+    
     meshvec[0]->Reference()->ResetReference();
     meshvec[0]->LoadReferences();
     int64_t nel = meshvec[0]->NElements();
@@ -3254,7 +3257,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         bool hasdependency = c.HasDependency();
 
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
-        intel->PRefine(2*pFlux);
+        intel->PRefine(2*pFlux+n_accuracy);
         TPZCompElSide large;
         
         if(hasdependency)
@@ -3302,7 +3305,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, int pFlux)
         }
         
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
-        intel->PRefine(2*pFlux);
+        intel->PRefine(2*pFlux+n_accuracy);
     }
     meshvec[1]->ExpandSolution();
 }
