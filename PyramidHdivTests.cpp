@@ -475,7 +475,7 @@ void TestingCondensation(){
 //    }
     fCondensed.SetF(ef);
     fCondensed.SetK01IsComputed(true);
-    fCondensed.SetfF0IsComputed(true);
+    fCondensed.SetF0IsComputed(true);
     fCondensed.SetReduced();// Directive that instructs the object to behave as reduced matrix.
     fCondensed.Print("Condensed = ",std::cout);
 }
@@ -653,6 +653,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
             an.Solve();
+            
+            an.Solution().Print("x = ",std::cout,EMathematicaInput);
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
