@@ -1162,6 +1162,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             Geometry.SetfDimensionlessL(s);
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
+//            FlipPyramids(gmesh);
             
         }
             break;
@@ -1280,13 +1281,19 @@ void FlipPyramids(TPZGeoMesh * gmesh){
         TPZVec<int64_t> left_node_indexes,right_node_indexes;
         gel_left->GetNodeIndices(left_node_indexes);
         gel_right->GetNodeIndices(right_node_indexes);
+        std::vector<int> perm;
+        perm.push_back(0);
+        perm.push_back(3);
+        perm.push_back(2);
+        perm.push_back(1);
         for (int i = 0; i < 4; i++) {
             right_node_indexes[i] = left_node_indexes[i];
-            gel_right->SetNodeIndex(i, left_node_indexes[i]);
+            gel_right->SetNodeIndex(i, left_node_indexes[perm[i]]);
         }
         
     }
-//    gmesh->BuildConnectivity();
+    gmesh->ResetConnectivities();
+    gmesh->BuildConnectivity();
     
 }
 
@@ -2558,9 +2565,9 @@ void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv)
         {
             TPZVec< TPZGeoEl * > filhos;
             TPZGeoEl * gel = gmesh->ElementVec()[elem];
-//            if (!gel || gel->HasSubElement()) {
-//                continue;
-//            }
+            if (!gel || gel->HasSubElement()) {
+                continue;
+            }
             gel->Divide(filhos);
         }
     }
@@ -3240,7 +3247,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid)
     for (int64_t el=0; el<nel; el++) {
         TPZGeoEl *gel = gmesh.Element(el);
         int matid = gel->MaterialId();
-        if (gel->Dimension() != meshdim-1 || matid == exceptmatid || gel->HasSubElement()) {
+        if (gel->Dimension() != meshdim-1 || matid == exceptmatid) {
             continue;
         }
         int nsides = gel->NSides();
