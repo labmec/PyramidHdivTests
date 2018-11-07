@@ -337,7 +337,7 @@ int integer_power(int base, unsigned int exp){
     
 }
 
-void CreateFlattenGeometry(TPZGeoMesh * gmesh);
+void CreateFlattenGeometry(TPZGeoMesh & gmesh);
 
 void FlipPyramids(TPZGeoMesh * gmesh);
 
@@ -1175,7 +1175,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
         // ------------------ Uniform Refining -------------------
         UniformRefine(gmesh, h_ref_level);
         if (run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ) {
-            CreateFlattenGeometry(gmesh);
+            CreateFlattenGeometry(*gmesh);
             FlipPyramids(gmesh);
         }
     }
@@ -1223,16 +1223,17 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     return gmesh;
 }
 
-void CreateFlattenGeometry(TPZGeoMesh * gmesh){
+void CreateFlattenGeometry(TPZGeoMesh & gmesh){
+    
     // Create a flatten mesh
-    TPZGeoMesh * geo_mesh = new TPZGeoMesh;
-    geo_mesh->SetName("Extacted mesh");
-    geo_mesh->SetDimension(gmesh->Dimension());
-    geo_mesh->NodeVec().Resize(gmesh->NNodes());
+    TPZGeoMesh geo_mesh;
+    geo_mesh.SetName("Extacted mesh");
+    geo_mesh.SetDimension(gmesh.Dimension());
+    geo_mesh.NodeVec().Resize(gmesh.NNodes());
     std::map<int64_t,int64_t> node_map;
     ino64_t counter_node = 0;
-    for (auto inode : gmesh->NodeVec()) {
-        geo_mesh->NodeVec()[counter_node] = inode;
+    for (auto inode : gmesh.NodeVec()) {
+        geo_mesh.NodeVec()[counter_node] = inode;
         node_map[inode.Id()] = counter_node;
         counter_node++;
     }
@@ -1240,7 +1241,7 @@ void CreateFlattenGeometry(TPZGeoMesh * gmesh){
     int matid;
     MElementType type;
     int64_t index;
-    for (auto iel : gmesh->ElementVec()) {
+    for (auto iel : gmesh.ElementVec()) {
         if(!iel){
             continue;
         }
@@ -1255,12 +1256,10 @@ void CreateFlattenGeometry(TPZGeoMesh * gmesh){
         }
         type = iel->Type();
         matid = iel->MaterialId();
-        geo_mesh->CreateGeoElement(type, node_indexes, matid, index);
+        geo_mesh.CreateGeoElement(type, node_indexes, matid, index);
     }
     
-    geo_mesh->BuildConnectivity();
-    
-    delete gmesh;
+    geo_mesh.BuildConnectivity();
     gmesh  = geo_mesh;
 }
 
