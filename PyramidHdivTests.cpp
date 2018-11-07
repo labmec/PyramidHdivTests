@@ -52,6 +52,8 @@
 #include "TPZGmshReader.h"
 #include "pzcondensedcompel.h"
 #include "pzshapetriang.h"
+#include "TPZRefPattern.h"
+#include "tpzgeoelrefpattern.h"
 
 // Simulation Control
 #include "TSimulationControl.h"
@@ -98,7 +100,7 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
 void LoadSolution(TPZCompMesh *cpressure);
 void ProjectFlux(TPZCompMesh *cfluxmesh);
 void GroupElements(TPZCompMesh *cmesh);
-void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv);
+void UniformRefine(TPZGeoMesh* gmesh, int nDiv);
 void LaplaceExact(const TPZVec<REAL> &pt, TPZVec<STATE> &f);
 
 void ExactSolution(const TPZVec<REAL> &pt, TPZVec<STATE> &sol, TPZFMatrix<STATE> &dsol);
@@ -334,6 +336,8 @@ int integer_power(int base, unsigned int exp){
         return base*temp*temp;
     
 }
+
+void CreateFlattenGeometry(TPZGeoMesh * gmesh);
 
 void FlipPyramids(TPZGeoMesh * gmesh);
 
@@ -1100,9 +1104,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     // ------------------ Creating GeoMesh -------------------
     TPZGeoMesh * gmesh = new TPZGeoMesh;
     EApproxSpace run_type = sim_control->m_run_type;
-    
     std::cout << "Creating geometry description." << std::endl;
-    
     switch (sim_control->m_geometry_type) {
         case EAcademic:{
 
@@ -1162,8 +1164,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
             Geometry.SetfDimensionlessL(s);
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
-//            FlipPyramids(gmesh);
-            
+        
         }
             break;
         default:
@@ -1172,27 +1173,11 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     
     if (sim_control->m_geometry_type!=EAcademic) {
         // ------------------ Uniform Refining -------------------
-        UniformRefineOnVolumetricElements(gmesh, h_ref_level);
-//        int volumetric_id = 1;
-//        DivideBoundaryElements(*gmesh,volumetric_id);
-        
-//        // ------------------ Directional Refining -------------------
-//        set<int> SetMatsRefDir;
-//        int bc_inner_boundary = 3;
-//        SetMatsRefDir.insert(bc_inner_boundary);
-//        for(int j = 0; j < h_ref_level; j++)
-//        {
-//            int nel = gmesh->NElements();
-//            for (int iref = 0; iref < nel; iref++)
-//            {
-//                TPZVec<TPZGeoEl*> filhos;
-//                TPZGeoEl * gelP2 = gmesh->ElementVec()[iref];
-//                if(!gelP2 || gelP2->HasSubElement()) continue;
-//                TPZRefPatternTools::RefineDirectional(gelP2, SetMatsRefDir);
-//
-//            }
-//        }
-//        SetMatsRefDir.clear();
+        UniformRefine(gmesh, h_ref_level);
+        if (run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ) {
+            CreateFlattenGeometry(gmesh);
+            FlipPyramids(gmesh);
+        }
     }
     
 #ifdef PZDEBUG
@@ -1213,7 +1198,6 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
        run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
     {
-        FlipPyramids(gmesh);
         DividePyramids(*gmesh);
         DivideBoundaryElements(*gmesh);
     }
@@ -1227,8 +1211,6 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
     }
 #endif
     
-//    gmesh->BuildConnectivity();
-    
 #ifdef LOG4CXX
     if(logger->isDebugEnabled())
     {
@@ -1239,6 +1221,47 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
 #endif
 
     return gmesh;
+}
+
+void CreateFlattenGeometry(TPZGeoMesh * gmesh){
+    // Create a flatten mesh
+    TPZGeoMesh * geo_mesh = new TPZGeoMesh;
+    geo_mesh->SetName("Extacted mesh");
+    geo_mesh->SetDimension(gmesh->Dimension());
+    geo_mesh->NodeVec().Resize(gmesh->NNodes());
+    std::map<int64_t,int64_t> node_map;
+    ino64_t counter_node = 0;
+    for (auto inode : gmesh->NodeVec()) {
+        geo_mesh->NodeVec()[counter_node] = inode;
+        node_map[inode.Id()] = counter_node;
+        counter_node++;
+    }
+    TPZManVector <int64_t,8> node_indexes;
+    int matid;
+    MElementType type;
+    int64_t index;
+    for (auto iel : gmesh->ElementVec()) {
+        if(!iel){
+            continue;
+        }
+        if(iel->HasSubElement()){
+            continue;
+        }
+        iel->GetNodeIndices(node_indexes);
+        
+        int n_nodes = node_indexes.size();
+        for (int i = 0; i < n_nodes; i++) {
+            node_indexes[i] = node_map[node_indexes[i]];
+        }
+        type = iel->Type();
+        matid = iel->MaterialId();
+        geo_mesh->CreateGeoElement(type, node_indexes, matid, index);
+    }
+    
+    geo_mesh->BuildConnectivity();
+    
+    delete gmesh;
+    gmesh  = geo_mesh;
 }
 
 void FlipPyramids(TPZGeoMesh * gmesh){
@@ -1270,7 +1293,15 @@ void FlipPyramids(TPZGeoMesh * gmesh){
         if(gel_neigh->Type()!=EPiramide){
             continue;
         }
-        left_right_pyramid_map[gel->Index()] = gel_neigh->Index();
+        TPZManVector<int64_t,5> left_node_indexes,right_node_indexes;
+        gel->GetNodeIndices(left_node_indexes);
+        gel_neigh->GetNodeIndices(right_node_indexes);
+        
+        bool is_candidate_Q = left_node_indexes[0] != right_node_indexes[0] && left_node_indexes[2] != right_node_indexes[2];
+        if (is_candidate_Q) {
+            left_right_pyramid_map[gel->Index()] = gel_neigh->Index();
+        }
+    
     }
     
 //    int n_pairs = left_right_pyramid_map.size();
@@ -1278,17 +1309,17 @@ void FlipPyramids(TPZGeoMesh * gmesh){
     for (auto ipair: left_right_pyramid_map) {
         TPZGeoEl * gel_left     = gmesh->Element(ipair.first);
         TPZGeoEl * gel_right    = gmesh->Element(ipair.second);
-        TPZVec<int64_t> left_node_indexes,right_node_indexes;
+        TPZManVector<int64_t,5> left_node_indexes,right_node_indexes;
         gel_left->GetNodeIndices(left_node_indexes);
         gel_right->GetNodeIndices(right_node_indexes);
-        std::vector<int> perm;
-        perm.push_back(0);
-        perm.push_back(3);
-        perm.push_back(2);
-        perm.push_back(1);
+//        std::vector<int> perm;
+//        perm.push_back(0);
+//        perm.push_back(3);
+//        perm.push_back(2);
+//        perm.push_back(1);
         for (int i = 0; i < 4; i++) {
             right_node_indexes[i] = left_node_indexes[i];
-            gel_right->SetNodeIndex(i, left_node_indexes[perm[i]]);
+            gel_right->SetNodeIndex(i, left_node_indexes[i]);
         }
         
     }
@@ -1380,8 +1411,7 @@ void ApproximationError(int nref, int porder, TPZVec<STATE> &errors, bool hdivmm
     //    TPZGeoMesh *gmesh = CreateGeoMesh1Tet();
     //    TPZGeoMesh *gmesh = CreateGeoMeshPrism();
     
-    UniformRefineOnVolumetricElements(gmesh, nref);
-    DebugStop();
+    UniformRefine(gmesh, nref);
     
 #ifdef LOG4CXX
     if(logger->isDebugEnabled() && nref < 2)
@@ -2555,7 +2585,7 @@ void InsertElasticityCubo(TPZCompMesh *mesh)
     mesh->InsertMaterialObject(bcauto3);
 }
 
-void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv)
+void UniformRefine(TPZGeoMesh* gmesh, int nDiv)
 {
 //    int geometry_dim = gmesh->Dimension();
     for(int D = 0; D < nDiv; D++)
@@ -2565,9 +2595,9 @@ void UniformRefineOnVolumetricElements(TPZGeoMesh* gmesh, int nDiv)
         {
             TPZVec< TPZGeoEl * > filhos;
             TPZGeoEl * gel = gmesh->ElementVec()[elem];
-            if (!gel || gel->HasSubElement()) {
-                continue;
-            }
+//            if (!gel || gel->HasSubElement()) {
+//                continue;
+//            }
             gel->Divide(filhos);
         }
     }
@@ -3035,8 +3065,7 @@ void VerifyDRhamCompatibility(TSimulationControl * control)
     HDivPiola = 1;
     TPZGeoMesh *gmesh = CreateGeoMesh1Pir();
     int nref = 0;
-    UniformRefineOnVolumetricElements(gmesh, nref);
-    DebugStop();
+    UniformRefine(gmesh, nref);
     {
         TPZVTKGeoMesh::PrintGMeshVTK(gmesh, "../PyramidGMesh.vtk", true);
     }
