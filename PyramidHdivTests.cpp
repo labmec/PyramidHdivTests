@@ -254,7 +254,6 @@ void Forcing(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
     return;
 }
 
-
 void BodyForcing(const TPZVec<REAL> &pt, TPZVec<STATE> &f) {
     TPZVec<STATE> u(1);
     TPZFMatrix<STATE> flux_and_f;
