@@ -177,6 +177,11 @@ Mesh.Algorithm3D = 4;
 
 EndIf
 
+
+Transfinite Line {wellbore_v_edges[]} = 4*n_wellbore; // Wellbore control
+Transfinite Line {wellbore_h_edges[]} = n_wellbore; // Wellbore control
+Transfinite Suface {wellbore_bc[]};
+
 // Tagging
 Physical Volume("reservoir") = {reservoir[],wellbore_region[]};
 //Physical Volume("wellbore") = {wellbore_region[]};

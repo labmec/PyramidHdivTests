@@ -15,7 +15,7 @@ Include "drill_wellbore.geo";
 outer_r = 5.0; // reservoir radius
 inner_r = 0.1; // wellbore radius
 h = 1; // vertical lenght
-s = 10.0; // amplification factor for the wellbore box
+s = 8.0; // amplification factor for the wellbore box
 
 ////////////////////////////////////////////////////////////////
 // Mesh Parameters
@@ -24,6 +24,7 @@ s = 10.0; // amplification factor for the wellbore box
 n_radial = 8;
 n_azimuthal = 8; 
 n_vertical = 1;
+n_wellbore = 5;
 radial_progression = 1.25;
 
 ////////////////////////////////////////////////////////////////
