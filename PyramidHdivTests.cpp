@@ -318,7 +318,7 @@ void ComputeConvergenceRates(TPZVec<REAL> &error, TPZVec<REAL> &h_size, TPZVec<R
 
 int ComputeApproximation(TSimulationControl * sim_control);
 
-TPZGeoMesh * GeometryConstruction(int n_h_ref_level, TSimulationControl * sim_control);
+TPZGeoMesh * GeometryConstruction(int n_h_ref_level, REAL & h_min, int & n_elements, TSimulationControl * sim_control);
 
 void UnwrapMesh(TPZCompMesh *cmesh);
 
@@ -335,6 +335,8 @@ int integer_power(int base, unsigned int exp){
         return base*temp*temp;
     
 }
+
+void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements);
 
 void CreateFlattenGeometry(TPZGeoMesh & gmesh);
 
@@ -372,6 +374,36 @@ int main(int argc, char *argv[])
     
     ComputeApproximation(sim_control);
     return 0;
+}
+
+void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements){
+    
+    h_min   = 1.0;
+    n_elements = 0;
+    
+    REAL h;
+    int nel = geometry->NElements();
+    for (int64_t iel = 0; iel < nel; iel++) {
+        TPZGeoEl * gel = geometry->Element(iel);
+        
+#ifdef PZDEBUG
+        if(!gel){
+            DebugStop();
+        }
+#endif
+        if (gel->Dimension() != geometry->Dimension() || gel->HasSubElement() == 1) {
+            continue;
+        }
+        
+        n_elements++;
+        
+        h = gel->CharacteristicSize();
+        
+        if (h < h_min) {
+            h_min = h;
+        }
+    }
+    
 }
 
 void TestingCondensation(){
@@ -544,16 +576,18 @@ int ComputeApproximation(TSimulationControl * sim_control)
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
-        output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(5) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(25) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
+        output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(10) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(25) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
     
         for (int i = 0 ; i <= n_h_levels; i++){
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
 #endif
-
-            int n_elements = integer_power(2,i);
-            gmesh = GeometryConstruction(i,sim_control);
+//            int n_elements = integer_power(2,i);
+//            REAL h = 1./REAL(n_elements);
+            int n_elements;
+            REAL h;
+            gmesh = GeometryConstruction(i,h,n_elements,sim_control);
             
             TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
             
@@ -718,11 +752,10 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #endif
             
             int h_level = i;
-            REAL h = 1./REAL(n_elements);
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
             REAL h_error = errors[2]; // div
-            output << setw(5) <<  h_level << setw(10) << n_elements << setw(10) << h << setw(15) << ndof << setw(15) << ndof_cond << setw(25) << assemble_time << setw(25) << solving_time << setw(25) << error_time << setw(25) << p_error << setw(25) << d_error  << setw(25) << h_error << endl;
+            output << setw(5) <<  h_level << setw(10) << n_elements << setw(15) << h << setw(15) << ndof << setw(15) << ndof_cond << setw(25) << assemble_time << setw(25) << solving_time << setw(25) << error_time << setw(25) << p_error << setw(25) << d_error  << setw(25) << h_error << endl;
             
             // Storage data for h convergence rates
             primal_error[i] = p_error;
@@ -1098,7 +1131,7 @@ void ComputeConvergenceRates(TPZVec<REAL> &error, TPZVec<REAL> &h_size, TPZVec<R
     }
 }
 
-TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_control){
+TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_elements, TSimulationControl * sim_control){
     
     // ------------------ Creating GeoMesh -------------------
     TPZGeoMesh * gmesh = new TPZGeoMesh;
@@ -1193,6 +1226,9 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, TSimulationControl * sim_cont
 //        PrintGeometryVols(gmesh, vols_name);
 //    }
 
+    // Computing mehs characteristics
+    ComputeCharacteristicHElSize(gmesh, h_min, n_elements);
+    
     // ------------------ Dividing pyramids in tets -------------------
     if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
        run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
