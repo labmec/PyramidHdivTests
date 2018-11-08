@@ -47,7 +47,7 @@ z = 0;
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 2; 
+mesh_type = 3; 
 
 
 

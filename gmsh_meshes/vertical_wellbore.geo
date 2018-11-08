@@ -14,7 +14,7 @@ Include "drill_wellbore.geo";
 
 outer_r = 5.0; // reservoir radius
 inner_r = 0.1; // wellbore radius
-h = 1; // vertical lenght
+h = 0.1; // vertical lenght
 s = 5.0; // amplification factor for the wellbore box
 
 ////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ radial_progression = 1.25;
 // // mesh_type = 2; // Prism dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 3; 
+mesh_type = 1; 
 
 Call MakeVerticalWellbore;
 
