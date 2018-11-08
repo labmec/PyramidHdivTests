@@ -22,8 +22,8 @@ s = 5.0; // amplification factor for the wellbore box
 ///////////////////////////////////////////////////////////////
 
 n_sphere = 4;
-n_structured = 4;
-n_radial = 8;
+n_structured = 3;
+n_radial = 2;
 radial_progression = 1.5;
 
 x_length = 1.0;
@@ -56,31 +56,31 @@ h=0.5;
 s=1.0/Sqrt(2.0);
 
 
-pc = newp; Point(pc) = {x,  y,  z} ;
-p1 = newp; Point(p1) = {x + r*h,  y + r*h,  z + r*s} ;
-p2 = newp; Point(p2) = {x + r*h,  y - r*h,  z + r*s} ;
-p3 = newp; Point(p3) = {x - r*h,  y - r*h,  z + r*s} ;
-p4 = newp; Point(p4) = {x - r*h,  y + r*h,  z + r*s} ;
-p5 = newp; Point(p5) = {x + r*h,  y + r*h,  z - r*s} ;
-p6 = newp; Point(p6) = {x + r*h,  y - r*h,  z - r*s} ;
-p7 = newp; Point(p7) = {x - r*h,  y - r*h,  z - r*s} ;
-p8 = newp; Point(p8) = {x - r*h,  y + r*h,  z - r*s} ;
+spc = newp; Point(spc) = {x,  y,  z} ;
+sp1 = newp; Point(sp1) = {x + r*h,  y + r*h,  z + r*s} ;
+sp2 = newp; Point(sp2) = {x + r*h,  y - r*h,  z + r*s} ;
+sp3 = newp; Point(sp3) = {x - r*h,  y - r*h,  z + r*s} ;
+sp4 = newp; Point(sp4) = {x - r*h,  y + r*h,  z + r*s} ;
+sp5 = newp; Point(sp5) = {x + r*h,  y + r*h,  z - r*s} ;
+sp6 = newp; Point(sp6) = {x + r*h,  y - r*h,  z - r*s} ;
+sp7 = newp; Point(sp7) = {x - r*h,  y - r*h,  z - r*s} ;
+sp8 = newp; Point(sp8) = {x - r*h,  y + r*h,  z - r*s} ;
 
 
-hl1 = newl; Circle(hl1) = {p1,pc,p2};
-hl2 = newl; Circle(hl2) = {p2,pc,p3};
-hl3 = newl; Circle(hl3) = {p3,pc,p4};
-hl4 = newl; Circle(hl4) = {p4,pc,p1};
+hl1 = newl; Circle(hl1) = {sp1,spc,sp2};
+hl2 = newl; Circle(hl2) = {sp2,spc,sp3};
+hl3 = newl; Circle(hl3) = {sp3,spc,sp4};
+hl4 = newl; Circle(hl4) = {sp4,spc,sp1};
 
-hl5 = newl; Circle(hl5) = {p5,pc,p6};
-hl6 = newl; Circle(hl6) = {p6,pc,p7};
-hl7 = newl; Circle(hl7) = {p7,pc,p8};
-hl8 = newl; Circle(hl8) = {p8,pc,p5};
+hl5 = newl; Circle(hl5) = {sp5,spc,sp6};
+hl6 = newl; Circle(hl6) = {sp6,spc,sp7};
+hl7 = newl; Circle(hl7) = {sp7,spc,sp8};
+hl8 = newl; Circle(hl8) = {sp8,spc,sp5};
 
-hl9 = newl; Circle(hl9) = {p5,pc,p1};
-hl10 = newl; Circle(hl10) = {p6,pc,p2};
-hl11 = newl; Circle(hl11) = {p7,pc,p3};
-hl12 = newl; Circle(hl12) = {p8,pc,p4};
+hl9 = newl; Circle(hl9) = {sp5,spc,sp1};
+hl10 = newl; Circle(hl10) = {sp6,spc,sp2};
+hl11 = newl; Circle(hl11) = {sp7,spc,sp3};
+hl12 = newl; Circle(hl12) = {sp8,spc,sp4};
 
 hll1  = newll; Line Loop(hll1) = {hl1,  hl2,   hl3, hl4}; // Bottom
 hll2  = newll; Line Loop(hll2) = {hl5,  hl6,   hl7, hl8}; // Top
@@ -90,12 +90,12 @@ hll5  = newll; Line Loop(hll5) = {hl3, -hl12, -hl7, hl11}; // North
 hll6  = newll; Line Loop(hll6) = {hl4, -hl9,  -hl8, hl12}; // West
 
 
-hs1  = news; Surface(hs1) = {hll1}; // Bottom unstructured region
-hs2  = news; Surface(hs2) = {hll2}; // Top unstructured region
-hs3  = news; Surface(hs3) = {hll3}; // South unstructured region
-hs4  = news; Surface(hs4) = {hll4}; // East unstructured region
-hs5  = news; Surface(hs5) = {hll5}; // North unstructured region
-hs6  = news; Surface(hs6) = {hll6}; // West unstructured region
+hs1  = news; Ruled Surface(hs1) = {hll1}; // Bottom unstructured region
+hs2  = news; Ruled Surface(hs2) = {hll2}; // Top unstructured region
+hs3  = news; Ruled Surface(hs3) = {hll3}; // South unstructured region
+hs4  = news; Ruled Surface(hs4) = {hll4}; // East unstructured region
+hs5  = news; Ruled Surface(hs5) = {hll5}; // North unstructured region
+hs6  = news; Ruled Surface(hs6) = {hll6}; // West unstructured region
 
 h_B[] = {hs1};
 h_T[] = {hs2};
@@ -262,6 +262,102 @@ obox6_boundaries[] = {rs5,rs6,rs7,rs8};
 radial_ribs[] = {rl1,rl2,rl3,rl4,rl5,rl6,rl7,rl8};
 radial_planes[] = {rs1,rs2,rs3,rs4,rs5,rs6,rs7,rs8,rs9,rs10,rs11,rs12};
 
+
+If(mesh_type == 2)
+
+
+
+// Creating another entities
+
+srl1  = newl; Line(srl1)  = {sp7,ip1};
+srl2  = newl; Line(srl2)  = {sp6,ip2};
+srl3  = newl; Line(srl3)  = {sp5,ip3};
+srl4  = newl; Line(srl4)  = {sp8,ip4};
+
+srl5  = newl; Line(srl5)  = {sp3,ip5};
+srl6  = newl; Line(srl6)  = {sp2,ip6};
+srl7  = newl; Line(srl7)  = {sp1,ip7};
+srl8  = newl; Line(srl8)  = {sp4,ip8};
+
+
+srll1  = newll; Line Loop(srll1) = {-hl6, srl2, -il1,  -srl1};
+srll2  = newll; Line Loop(srll2) = {-hl5, srl3, -il2,  -srl2};
+srll3  = newll; Line Loop(srll3) = {-hl8, srl4, -il3,  -srl3};
+srll4  = newll; Line Loop(srll4) = {-hl7, srl1, -il4,  -srl4};
+
+
+srll5  = newll; Line Loop(srll5) = {-hl2, srl6, -il5,  -srl5};
+srll6  = newll; Line Loop(srll6) = {-hl1, srl7, -il6,  -srl6};
+srll7  = newll; Line Loop(srll7) = {-hl4, srl8, -il7,  -srl7};
+srll8  = newll; Line Loop(srll8) = {-hl3, srl5, -il8,  -srl8};
+
+
+srll9  = newll; Line Loop(srll9) = {-srl1, hl11, srl5, il9};
+srll10  = newll; Line Loop(srll10) = {-srl2, hl10, srl6, il10};
+srll11  = newll; Line Loop(srll11) = {-srl3, hl9, srl7, il11};
+srll12  = newll; Line Loop(srll12) = {-srl4, hl12, srl8, il12};
+
+srs1  = news; Plane Surface(srs1) = {srll1};
+srs2  = news; Plane Surface(srs2) = {srll2};
+srs3  = news; Plane Surface(srs3) = {srll3};
+srs4  = news; Plane Surface(srs4) = {srll4};
+srs5  = news; Plane Surface(srs5) = {srll5};
+srs6  = news; Plane Surface(srs6) = {srll6};
+srs7  = news; Plane Surface(srs7) = {srll7};
+srs8  = news; Plane Surface(srs8) = {srll8};
+srs9  = news; Plane Surface(srs9) = {srll9};
+srs10  = news; Plane Surface(srs10) = {srll10};
+srs11  = news; Plane Surface(srs11) = {srll11};
+srs12  = news; Plane Surface(srs12) = {srll12};
+
+
+is1_boundaries[] = {srs1,srs9,srs5,srs10};
+is2_boundaries[] = {srs2,srs10,srs6,srs11};
+is3_boundaries[] = {srs3,srs11,srs7,srs12};
+is4_boundaries[] = {srs4,srs12,srs8,srs9};
+
+is5_boundaries[] = {srs1,srs2,srs3,srs4};
+is6_boundaries[] = {srs5,srs6,srs7,srs8};
+
+sradial_ribs[] = {srl1,srl2,srl3,srl4,srl5,srl6,srl7,srl8};
+sradial_planes[] = {srs1,srs2,srs3,srs4,srs5,srs6,srs7,srs8,srs9,srs10,srs11,srs12};
+
+ssl1 = newsl; Surface Loop(ssl1) = {is1_boundaries[],h_S[],ibox_S[]};
+ssl2 = newsl; Surface Loop(ssl2) = {is2_boundaries[],h_E[],ibox_E[]};
+ssl3 = newsl; Surface Loop(ssl3) = {is3_boundaries[],h_N[],ibox_N[]};
+ssl4 = newsl; Surface Loop(ssl4) = {is4_boundaries[],h_W[],ibox_W[]};
+ssl5 = newsl; Surface Loop(ssl5) = {is5_boundaries[],h_B[],ibox_B[]};
+ssl6 = newsl; Surface Loop(ssl6) = {is6_boundaries[],h_T[],ibox_T[]};
+
+sv1  = newv; Volume(sv1) = {ssl1};
+sv2  = newv; Volume(sv2) = {ssl2};
+sv3  = newv; Volume(sv3) = {ssl3};
+sv4  = newv; Volume(sv4) = {ssl4};
+sv5  = newv; Volume(sv5) = {ssl5};
+sv6  = newv; Volume(sv6) = {ssl6};
+
+unstructured[] = {sv1,sv2,sv3,sv4,sv5,sv6};
+
+
+
+sl1 = newsl; Surface Loop(sl1) = {obox1_boundaries[],ibox_S[],obox_S[]};
+sl2 = newsl; Surface Loop(sl2) = {obox2_boundaries[],ibox_E[],obox_E[]};
+sl3 = newsl; Surface Loop(sl3) = {obox3_boundaries[],ibox_N[],obox_N[]};
+sl4 = newsl; Surface Loop(sl4) = {obox4_boundaries[],ibox_W[],obox_W[]};
+sl5 = newsl; Surface Loop(sl5) = {obox5_boundaries[],ibox_B[],obox_B[]};
+sl6 = newsl; Surface Loop(sl6) = {obox6_boundaries[],ibox_T[],obox_T[]};
+
+v1  = newv; Volume(v1) = {sl1};
+v2  = newv; Volume(v2) = {sl2};
+v3  = newv; Volume(v3) = {sl3};
+v4  = newv; Volume(v4) = {sl4};
+v5  = newv; Volume(v5) = {sl5};
+v6  = newv; Volume(v6) = {sl6};
+
+structured[] = {v1,v2,v3,v4,v5,v6};
+
+Else
+
 isl1 = newsl; Surface Loop(isl1) = {ibox_boundaries[],spherical_hole[]};
 iv1  = newv; Volume(iv1) = {isl1};
 unstructured[] = {iv1};
@@ -280,8 +376,11 @@ v4  = newv; Volume(v4) = {sl4};
 v5  = newv; Volume(v5) = {sl5};
 v6  = newv; Volume(v6) = {sl6};
 
-
 structured[] = {v1,v2,v3,v4,v5,v6};
+
+EndIf
+
+
 
 
 // Common meshing controls
@@ -295,6 +394,13 @@ Transfinite Surface {ibox_boundaries[],obox_boundaries[],radial_planes[]};
 
 If(mesh_type == 2)
 
+Physical Line("RIBS") = {ibox_ribs[],obox_ribs[],spherical_ribs[]};
+
+Transfinite Line {ibox_ribs[],obox_ribs[],spherical_ribs[]} = n_structured;
+Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
+radial_progression = 0.75*radial_progression;
+Transfinite Line {sradial_ribs[]} =  n_radial Using Progression radial_progression;
+
 // Meshing directives for surfaces
 Transfinite Surface "*";
 Recombine Surface "*";
@@ -302,7 +408,7 @@ Transfinite Volume "*";
 Recombine Volume "*";
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
-Mesh.Algorithm3D = 4;
+Mesh.Algorithm3D = 6;
 
 EndIf
 

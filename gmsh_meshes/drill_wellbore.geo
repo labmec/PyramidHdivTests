@@ -1,7 +1,7 @@
 
 // ---- Gmsh Macro ----
 // ---- Vertical wellbore wih hybrid 3D mesh  ----
-// Created 01/02/2018 by Omar Durán
+// Created 8/11/2018 by Omar Durán
 // Labmec, University of Campinas
 // --------------------------------------------
 
