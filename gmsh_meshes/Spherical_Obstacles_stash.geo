@@ -408,7 +408,7 @@ Transfinite Volume "*";
 Recombine Volume "*";
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
-Mesh.Algorithm3D = 6;
+Mesh.Algorithm3D = 4;
 
 EndIf
 
