@@ -129,7 +129,8 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-#define Solution_Dupuit_Thiem
+//#define Solution_Dupuit_Thiem
+#define Solution_Spherical_Barrier
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -227,6 +228,56 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     
     flux_and_f(3,0) = 0.0;
     return;
+#endif
+    
+#ifdef Solution_Spherical_Barrier
+    
+    REAL x = pt[0];
+    REAL y = pt[1];
+    REAL z = pt[2];
+    
+    flux_and_f.Resize(4,1);
+    
+
+    REAL v = 1.0;
+    REAL a = 0.2;
+    
+    REAL r = sqrt(x*x+y*y+z*z);
+    REAL theta = acos(z/r);
+    REAL phi = atan2(y,x);
+    
+    REAL costheta = cos(theta);
+    REAL sintheta = sin(theta);
+    REAL sinphi = sin(phi);
+    REAL cosphi = cos(phi);
+    
+    
+    REAL p = -(1.0/(2.0*r*r))*((a*a*a) + 2*(r*r*r))*v*costheta;
+    REAL dpdr = ((a*a*a)/(r*r*r) - 1.0)*v*costheta;
+    REAL dpdTheta = 0.5*((a*a*a)/(r*r*r) + 2.0)*v*sintheta;
+    REAL dpdPhi = 0.0;
+    
+    // Gradient computations
+    REAL Radialunitx = sintheta*cosphi;
+    REAL Radialunity = sintheta*sinphi;
+    REAL Radialunitz = costheta;
+
+    REAL Thetaunitx = cosphi*costheta;
+    REAL Thetaunity = costheta*sinphi;
+    REAL Thetaunitz = -sintheta;
+
+    REAL Phiunitx = -sinphi;
+    REAL Phiunity = cosphi;
+    REAL Phiunitz = 0.0;
+    
+    u[0] = p;
+    
+    flux_and_f(0,0) = -1.0*(dpdr * Radialunitx + dpdTheta * Thetaunitx + dpdPhi * Phiunitx);
+    flux_and_f(1,0) = -1.0*(dpdr * Radialunity + dpdTheta * Thetaunity + dpdPhi * Phiunity);
+    flux_and_f(2,0) = -1.0*(dpdr * Radialunitz + dpdTheta * Thetaunitz + dpdPhi * Phiunitz);
+    
+    flux_and_f(3,0) = 0.0;
+
 #endif
     
 }
@@ -549,8 +600,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -1197,6 +1248,15 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
         
+        }
+            break;
+        case ESphericalBarrierHePyTe:{
+            TPZGmshReader Geometry;
+            REAL s = 1.0;
+            Geometry.SetfDimensionlessL(s);
+            std::string gmsh_file("spherical_obstacle_hybrid.msh");
+            gmesh = Geometry.GeometricGmshMesh(gmsh_file);
+            
         }
             break;
         default:
@@ -2115,6 +2175,19 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
             
         }
             break;
+            
+        case ESphericalBarrierHePyTe:
+        {
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_outer);
+            
+            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_inner);
+            
+        }
+            break;
         default:{
             DebugStop();
         }
@@ -2281,6 +2354,30 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
             TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
             bc_impervious->SetForcingFunction(0,force);
             mphysics->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case ESphericalBarrierHePyTe:
+        {
+            const int matid = 1;
+            TPZDualPoisson * mat = new TPZDualPoisson(matid);
+            mphysics->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_inner);
             
         }
             break;

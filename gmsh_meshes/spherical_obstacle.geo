@@ -21,7 +21,7 @@ s = 5.0; // amplification factor for the wellbore box
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
-n_sphere = 4;
+n_sphere = 8;
 n_structured = 4;
 n_radial = 8;
 radial_progression = 1.5;
@@ -330,7 +330,6 @@ EndIf
 Physical Volume("domain") = {unstructured[],structured[]};
 Physical Surface("outer_bc") = {obox_boundaries[]};
 Physical Surface("inner_bc") = {spherical_hole[]};
-//Physical Surface("non_flux_bc") = {top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
 
 
 
