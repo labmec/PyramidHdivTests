@@ -21,11 +21,23 @@ s = 5.0; // amplification factor for the wellbore box
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
+n_sphere = 5;
+n_structured = 4;
 n_radial = 8;
-n_azimuthal = 8; 
-n_vertical = 1;
-n_wellbore = 5;
-radial_progression = 1.25;
+radial_progression = 1.5;
+
+x_length = 1.0;
+y_length = 1.0;
+z_length = 1.0;
+
+o_x_length = 5.0;
+o_y_length = 5.0;
+o_z_length = 10.0;
+
+r = 0.25;
+x = 0;
+y = 0;
+z = 0;
 
 ////////////////////////////////////////////////////////////////
 // Mesh Type
@@ -37,53 +49,62 @@ radial_progression = 1.25;
 
 mesh_type = 3; 
 
-n_sphere = 10;
-n_unstructured = 5;
-
-x_length = 1.0;
-y_length = 1.0;
-z_length = 1.0;
-
-o_x_length = 2.0;
-o_y_length = 2.0;
-o_z_length = 2.0;
-
-r = 0.25;
-x = 0;
-y = 0;
-z = 0;
 
 // Spherical hole
+h=0.5;
+s=1.0/Sqrt(2.0);
 
-p1 = newp; Point(p1) = {x,  y,  z} ;
-p2 = newp; Point(p2) = {x+r,y,  z} ;
-p3 = newp; Point(p3) = {x,  y+r,z} ;
-p4 = newp; Point(p4) = {x,  y,  z+r};
-p5 = newp; Point(p5) = {x-r,y,  z} ;
-p6 = newp; Point(p6) = {x,  y-r,z} ;
-p7 = newp; Point(p7) = {x,  y,  z-r};
 
-lc1 = newl; Circle(lc1) = {p2,p1,p7}; lc2 = newl; Circle(lc2) = {p7,p1,p5};
-lc3 = newl; Circle(lc3) = {p5,p1,p4}; lc4 = newl; Circle(lc4) = {p4,p1,p2};
-lc5 = newl; Circle(lc5) = {p2,p1,p3}; lc6 = newl; Circle(lc6) = {p3,p1,p5};
-lc7 = newl; Circle(lc7) = {p5,p1,p6}; lc8 = newl; Circle(lc8) = {p6,p1,p2};
-lc9 = newl; Circle(lc9) = {p7,p1,p3}; lc10 = newl; Circle(lc10) = {p3,p1,p4};
-lc11 = newl; Circle(lc11) = {p4,p1,p6}; lc12 = newl; Circle(lc12) = {p6,p1,p7};
+pc = newp; Point(pc) = {x,  y,  z} ;
+p1 = newp; Point(p1) = {x + r*h,  y + r*h,  z + r*s} ;
+p2 = newp; Point(p2) = {x + r*h,  y - r*h,  z + r*s} ;
+p3 = newp; Point(p3) = {x - r*h,  y - r*h,  z + r*s} ;
+p4 = newp; Point(p4) = {x - r*h,  y + r*h,  z + r*s} ;
+p5 = newp; Point(p5) = {x + r*h,  y + r*h,  z - r*s} ;
+p6 = newp; Point(p6) = {x + r*h,  y - r*h,  z - r*s} ;
+p7 = newp; Point(p7) = {x - r*h,  y - r*h,  z - r*s} ;
+p8 = newp; Point(p8) = {x - r*h,  y + r*h,  z - r*s} ;
 
-// We need non-plane surfaces to define the spherical holes. Here we use ruled
-// surfaces, which can have 3 or 4 sides:
 
-ll1 = newll; Line Loop(ll1) = {lc5,lc10,lc4};    s1 = news; Surface(s1) = {ll1};
-ll2 = newll; Line Loop(ll2) = {lc9,-lc5,lc1};    s2 = news; Surface(s2) = {ll2};
-ll3 = newll; Line Loop(ll3) = {lc12,-lc8,-lc1};  s3 = news; Surface(s3) = {ll3};
-ll4 = newll; Line Loop(ll4) = {lc8,-lc4,lc11};   s4 = news; Surface(s4) = {ll4};
-ll5 = newll; Line Loop(ll5) = {-lc10,lc6,lc3};   s5 = news; Surface(s5) = {ll5};
-ll6 = newll; Line Loop(ll6) = {-lc11,-lc3,lc7};  s6 = news; Surface(s6) = {ll6};
-ll7 = newll; Line Loop(ll7) = {-lc2,-lc7,-lc12}; s7 = news; Surface(s7) = {ll7};
-ll8 = newll; Line Loop(ll8) = {-lc6,-lc9,lc2};   s8 = news; Surface(s8) = {ll8};
+hl1 = newl; Circle(hl1) = {p1,pc,p2};
+hl2 = newl; Circle(hl2) = {p2,pc,p3};
+hl3 = newl; Circle(hl3) = {p3,pc,p4};
+hl4 = newl; Circle(hl4) = {p4,pc,p1};
 
-spherical_ribs[] = {lc1,lc2,lc3,lc4,lc5,lc6,lc7,lc8,lc9,lc10,lc11,lc12};
-spherical_hole[] = {s1,s2,s3,s4,s5,s6,s7,s8};
+hl5 = newl; Circle(hl5) = {p5,pc,p6};
+hl6 = newl; Circle(hl6) = {p6,pc,p7};
+hl7 = newl; Circle(hl7) = {p7,pc,p8};
+hl8 = newl; Circle(hl8) = {p8,pc,p5};
+
+hl9 = newl; Circle(hl9) = {p5,pc,p1};
+hl10 = newl; Circle(hl10) = {p6,pc,p2};
+hl11 = newl; Circle(hl11) = {p7,pc,p3};
+hl12 = newl; Circle(hl12) = {p8,pc,p4};
+
+hll1  = newll; Line Loop(hll1) = {hl1,  hl2,   hl3, hl4}; // Bottom
+hll2  = newll; Line Loop(hll2) = {hl5,  hl6,   hl7, hl8}; // Top
+hll3  = newll; Line Loop(hll3) = {hl1, -hl10, -hl5, hl9}; // South
+hll4  = newll; Line Loop(hll4) = {hl2, -hl11, -hl6, hl10}; // East
+hll5  = newll; Line Loop(hll5) = {hl3, -hl12, -hl7, hl11}; // North
+hll6  = newll; Line Loop(hll6) = {hl4, -hl9,  -hl8, hl12}; // West
+
+
+hs1  = news; Surface(hs1) = {hll1}; // Bottom unstructured region
+hs2  = news; Surface(hs2) = {hll2}; // Top unstructured region
+hs3  = news; Surface(hs3) = {hll3}; // South unstructured region
+hs4  = news; Surface(hs4) = {hll4}; // East unstructured region
+hs5  = news; Surface(hs5) = {hll5}; // North unstructured region
+hs6  = news; Surface(hs6) = {hll6}; // West unstructured region
+
+h_B[] = {hs1};
+h_T[] = {hs2};
+h_S[] = {hs3};
+h_E[] = {hs4};
+h_N[] = {hs5};
+h_W[] = {hs6};
+
+spherical_ribs[] = {hl1,hl2,hl3,hl4,hl5,hl6,hl7,hl8,hl9,hl10,hl11,hl12};
+spherical_hole[] = {h_B[],h_T[],h_S[],h_E[],h_N[],h_W[]};
 
 // Innner volume
 
@@ -182,6 +203,8 @@ obox_S[] = {s3};
 obox_E[] = {s4};
 obox_N[] = {s5};
 obox_W[] = {s6};
+
+obox_ribs[] = {l1,l2,l3,l4,l5,l6,l7,l8,l9,l10,l11,l12};
 obox_boundaries[] = {obox_B[],obox_T[],obox_S[],obox_E[],obox_N[],obox_W[]};
 
 
@@ -196,8 +219,6 @@ rl5  = newl; Line(rl5)  = {ip5,p5};
 rl6  = newl; Line(rl6)  = {ip6,p6};
 rl7  = newl; Line(rl7)  = {ip7,p7};
 rl8  = newl; Line(rl8)  = {ip8,p8};
-
-//radial_lines[] = {rl1,rl2,rl3,rl4,rl5,rl6,rl7,rl8};
 
 rll1  = newll; Line Loop(rll1) = {il1, rl2, -l1,  -rl1};
 rll2  = newll; Line Loop(rll2) = {il2, rl3, -l2,  -rl2};
@@ -214,17 +235,17 @@ rll10  = newll; Line Loop(rll10) = {-rl2, -il10, rl6, l10};
 rll11  = newll; Line Loop(rll11) = {-rl3, -il11, rl7, l11};
 rll12  = newll; Line Loop(rll12) = {-rl4, -il12, rl8, l12};
 
-rs1  = news; Plane Surface(rll1) = {rll1};
-rs2  = news; Plane Surface(rll2) = {rll2};
-rs3  = news; Plane Surface(rll3) = {rll3};
-rs4  = news; Plane Surface(rll4) = {rll4};
+rs1  = news; Plane Surface(rs1) = {rll1};
+rs2  = news; Plane Surface(rs2) = {rll2};
+rs3  = news; Plane Surface(rs3) = {rll3};
+rs4  = news; Plane Surface(rs4) = {rll4};
 
-rs5  = news; Plane Surface(rll5) = {rll5};
-rs6  = news; Plane Surface(rll6) = {rll6};
-rs7  = news; Plane Surface(rll7) = {rll7};
-rs8  = news; Plane Surface(rll8) = {rll8};
+rs5  = news; Plane Surface(rs5) = {rll5};
+rs6  = news; Plane Surface(rs6) = {rll6};
+rs7  = news; Plane Surface(rs7) = {rll7};
+rs8  = news; Plane Surface(rs8) = {rll8};
 
-rs9  = news; Plane Surface(rll9) = {rll9};
+rs9  = news; Plane Surface(rs9) = {rll9};
 rs10  = news; Plane Surface(rs10) = {rll10};
 rs11  = news; Plane Surface(rs11) = {rll11};
 rs12  = news; Plane Surface(rs12) = {rll12};
@@ -234,38 +255,56 @@ obox2_boundaries[] = {rs2,rs10,rs6,rs11};
 obox3_boundaries[] = {rs3,rs11,rs7,rs12};
 obox4_boundaries[] = {rs4,rs12,rs8,rs9};
 
-Transfinite Line {spherical_ribs[]} = n_sphere;
-Transfinite Line {ibox_ribs[]} = n_unstructured;
-Transfinite Surface {ibox_boundaries[],obox_boundaries[]};
+obox5_boundaries[] = {rs1,rs2,rs3,rs4};
+obox6_boundaries[] = {rs5,rs6,rs7,rs8};
+
+radial_ribs[] = {rl1,rl2,rl3,rl4,rl5,rl6,rl7,rl8};
+radial_planes[] = {rs1,rs2,rs3,rs4,rs5,rs6,rs7,rs8,rs9,rs10,rs11,rs12};
 
 isl1 = newsl; Surface Loop(isl1) = {ibox_boundaries[],spherical_hole[]};
-iv1  = newv; Volume(iv1) = {isl1} ;
+iv1  = newv; Volume(iv1) = {isl1};
 unstructured[] = {iv1};
 
-
-sl1 = newsl; Surface Loop(sl1) = {obox1_boundaries[]};
-sl2 = newsl; Surface Loop(sl2) = {obox2_boundaries[]};
-sl3 = newsl; Surface Loop(sl3) = {obox3_boundaries[]};
-sl4 = newsl; Surface Loop(sl4) = {obox4_boundaries[]};
+sl1 = newsl; Surface Loop(sl1) = {obox1_boundaries[],ibox_S[],obox_S[]};
+sl2 = newsl; Surface Loop(sl2) = {obox2_boundaries[],ibox_E[],obox_E[]};
+sl3 = newsl; Surface Loop(sl3) = {obox3_boundaries[],ibox_N[],obox_N[]};
+sl4 = newsl; Surface Loop(sl4) = {obox4_boundaries[],ibox_W[],obox_W[]};
+sl5 = newsl; Surface Loop(sl5) = {obox5_boundaries[],ibox_B[],obox_B[]};
+sl6 = newsl; Surface Loop(sl6) = {obox6_boundaries[],ibox_T[],obox_T[]};
 
 v1  = newv; Volume(v1) = {sl1};
 v2  = newv; Volume(v2) = {sl2};
 v3  = newv; Volume(v3) = {sl3};
 v4  = newv; Volume(v4) = {sl4};
+v5  = newv; Volume(v5) = {sl5};
+v6  = newv; Volume(v6) = {sl6};
 
 
-structured[] = {v1,v2,v3,v4};
+structured[] = {v1,v2,v3,v4,v5,v6};
+
+
+// Common meshing controls
+
+Transfinite Line {spherical_ribs[]} = n_sphere;
+Transfinite Line {ibox_ribs[],obox_ribs[]} = n_structured;
+Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
+Transfinite Surface {ibox_boundaries[],obox_boundaries[],radial_planes[]};
 
 
 If(mesh_type == 3)
 
 // Meshing directives for surfaces
-Recombine Surface{obox_boundaries[]};
-
+Recombine Surface{obox_boundaries[],radial_planes[]};
+Recombine Volume{structured[]};
 
 // Meshing directives for volumes
 Transfinite Volume{structured[]}; // Regular partition for the reservoir region
-TransfQuadTri {structured[],unstructured[]}; // Directive to force the pyramids between volumes : 1 (quads) and 5 (tri)
+TransfQuadTri {v1,iv1}; // Directive to force the pyramids between volumes : v1 (quads) and iv1 (tri)
+TransfQuadTri {v2,iv1}; // Directive to force the pyramids between volumes : v2 (quads) and iv1 (tri)
+TransfQuadTri {v3,iv1}; // Directive to force the pyramids between volumes : v3 (quads) and iv1 (tri)
+TransfQuadTri {v4,iv1}; // Directive to force the pyramids between volumes : v4 (quads) and iv1 (tri)
+TransfQuadTri {v5,iv1}; // Directive to force the pyramids between volumes : v5 (quads) and iv1 (tri)
+TransfQuadTri {v6,iv1}; // Directive to force the pyramids between volumes : v6 (quads) and iv1 (tri)
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
 Mesh.Algorithm3D = 4;
@@ -276,8 +315,6 @@ EndIf
 Physical Volume("domain") = {unstructured[],structured[]};
 Physical Surface("outer_bc") = {obox_boundaries[]};
 Physical Surface("inner_bc") = {spherical_hole[]};
-Physical Surface("obox1_boundaries") = {rs1,rs5};
-
 //Physical Surface("non_flux_bc") = {top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
 
 
