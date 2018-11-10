@@ -435,6 +435,12 @@ EndIf
 
 Coherence;
 
+
+Physical Volume("domain") = {unstructured[],structured[]};
+Physical Surface("outer_bc") = {obox_boundaries[]};
+Physical Surface("inner_bc") = {spherical_hole[]};
+
+
 // optimize the mesh
 Mesh.Optimize = 1;
 Mesh  3;
@@ -452,9 +458,6 @@ If(mesh_type == 3)
 Save "./spherical_obstacle_hybrid.msh";
 EndIf
 
-Physical Volume("domain") = {unstructured[],structured[]};
-Physical Surface("outer_bc") = {obox_boundaries[]};
-Physical Surface("inner_bc") = {spherical_hole[]};
 
 
 

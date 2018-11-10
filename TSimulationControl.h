@@ -19,7 +19,7 @@
 enum EApproxSpace {EPyramid, EDividedPyramid, EDividedPyramidIncreasedOrder, EDividedPyramid4, EDividedPyramidIncreasedOrder4, ETetrahedra, EHexaHedra};
 
 /// Enumerate that defines the type of geometry type
-enum EGeometryType {EAcademic, EVerticalWellHePyTe, EVerticalWellTe, EVerticalWellHe, ESphericalBarrierHePyTe, ESphericalBarrierTe};
+enum EGeometryType {EAcademic, EVerticalWellHePyTe, EVerticalWellTe, EVerticalWellHe, ESphericalBarrierHePyTe, ESphericalBarrierTe, ESphericalBarrierHe};
 
 
 // Class that defines all the simulation controls
