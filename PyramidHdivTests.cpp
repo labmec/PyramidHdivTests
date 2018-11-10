@@ -1259,6 +1259,15 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             
         }
             break;
+        case ESphericalBarrierTe:{
+            TPZGmshReader Geometry;
+            REAL s = 1.0;
+            Geometry.SetfDimensionlessL(s);
+            std::string gmsh_file("spherical_obstacle_Te.msh");
+            gmesh = Geometry.GeometricGmshMesh(gmsh_file);
+            
+        }
+            break;
         default:
             break;
     }
@@ -2188,6 +2197,18 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
             
         }
             break;
+        case ESphericalBarrierTe:
+        {
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            TPZBndCond *bc_outer = mymat->CreateBC(mymat, bc_outer_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_outer);
+            
+            TPZBndCond *bc_inner = mymat->CreateBC(mymat, bc_inner_id, dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(bc_inner);
+            
+        }
+            break;
         default:{
             DebugStop();
         }
@@ -2358,6 +2379,30 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
         }
             break;
         case ESphericalBarrierHePyTe:
+        {
+            const int matid = 1;
+            TPZDualPoisson * mat = new TPZDualPoisson(matid);
+            mphysics->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            mphysics->InsertMaterialObject(bc_inner);
+            
+        }
+            break;
+        case ESphericalBarrierTe:
         {
             const int matid = 1;
             TPZDualPoisson * mat = new TPZDualPoisson(matid);
