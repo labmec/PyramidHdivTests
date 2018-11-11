@@ -32,9 +32,10 @@ s = 5.0; // amplification factor for the wellbore box
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
-n_sphere = 8;
-n_structured = 4;
-n_radial = 8;
+n_sphere = 3;
+n_structured = 3;
+n_radial = 4;
+n_i_radial = 2;
 radial_progression = 1.25;
 
 x_length = 1.0;
@@ -45,7 +46,7 @@ o_x_length = 5.0;
 o_y_length = 5.0;
 o_z_length = 5.0;
 
-r = 0.25;
+r = 0.1;
 x = 0;
 y = 0;
 z = 0;
@@ -58,7 +59,8 @@ z = 0;
 
 // Spherical hole
 h=0.5;
-s=1.0/Sqrt(2.0);
+s=2.0/Sqrt(3.0);
+h=s;
 
 
 spc = newp; Point(spc) = {x,  y,  z} ;
@@ -272,7 +274,7 @@ radial_planes[] = {rs1,rs2,rs3,rs4,rs5,rs6,rs7,rs8,rs9,rs10,rs11,rs12};
 
 
 
-If(mesh_type == 2)
+If(mesh_type != 0)
 
 // Creating another entities
 
@@ -398,12 +400,25 @@ Transfinite Surface {ibox_boundaries[],obox_boundaries[],radial_planes[]};
 
 // Mesh types
 
+If(mesh_type == 1)
+
+Transfinite Line {ibox_ribs[],obox_ribs[],spherical_ribs[]} = n_structured;
+Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
+radial_progression = 0.75*radial_progression;
+Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progression;
+
+// Meshing directives for surfaces
+Transfinite Surface "*";
+Transfinite Volume "*";
+
+EndIf
+
 If(mesh_type == 2)
 
 Transfinite Line {ibox_ribs[],obox_ribs[],spherical_ribs[]} = n_structured;
 Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
 radial_progression = 0.75*radial_progression;
-Transfinite Line {sradial_ribs[]} =  n_radial Using Progression radial_progression;
+Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progression;
 
 // Meshing directives for surfaces
 Transfinite Surface "*";
@@ -415,18 +430,27 @@ EndIf
 
 If(mesh_type == 3)
 
+
+Transfinite Line {ibox_ribs[],obox_ribs[],spherical_ribs[]} = n_structured;
+Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
+radial_progression = 0.75*radial_progression;
+Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progression;
+Transfinite Surface "*";
+
+
 // Meshing directives for surfaces
+Transfinite Surface{obox_boundaries[],radial_planes[],sradial_planes[]};
 Recombine Surface{obox_boundaries[],radial_planes[]};
 Recombine Volume{structured[]};
 
 // Meshing directives for volumes
 Transfinite Volume{structured[]}; // Regular partition for the reservoir region
-TransfQuadTri {v1,iv1}; // Directive to force the pyramids between volumes : v1 (quads) and iv1 (tri)
-TransfQuadTri {v2,iv1}; // Directive to force the pyramids between volumes : v2 (quads) and iv1 (tri)
-TransfQuadTri {v3,iv1}; // Directive to force the pyramids between volumes : v3 (quads) and iv1 (tri)
-TransfQuadTri {v4,iv1}; // Directive to force the pyramids between volumes : v4 (quads) and iv1 (tri)
-TransfQuadTri {v5,iv1}; // Directive to force the pyramids between volumes : v5 (quads) and iv1 (tri)
-TransfQuadTri {v6,iv1}; // Directive to force the pyramids between volumes : v6 (quads) and iv1 (tri)
+TransfQuadTri {v1,sv1}; // Directive to force the pyramids between volumes : v1 (quads) and iv1 (tri)
+TransfQuadTri {v2,sv2}; // Directive to force the pyramids between volumes : v2 (quads) and iv1 (tri)
+TransfQuadTri {v3,sv3}; // Directive to force the pyramids between volumes : v3 (quads) and iv1 (tri)
+TransfQuadTri {v4,sv4}; // Directive to force the pyramids between volumes : v4 (quads) and iv1 (tri)
+TransfQuadTri {v5,sv5}; // Directive to force the pyramids between volumes : v5 (quads) and iv1 (tri)
+TransfQuadTri {v6,sv6}; // Directive to force the pyramids between volumes : v6 (quads) and iv1 (tri)
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
 Mesh.Algorithm3D = 4;
