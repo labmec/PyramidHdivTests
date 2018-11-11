@@ -116,8 +116,8 @@ If(mesh_type == 0)
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
-//Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
-Transfinite Surface "*";
+Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
+//Transfinite Surface "*";
 //Transfinite Volume {reservoir[],wellbore_region[]};
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
@@ -217,8 +217,10 @@ Geometry.Tolerance=1e-05;
 Coherence Mesh;
 
 // optimize the mesh
-Mesh.Optimize = 1;
 Mesh  3;
+Mesh.Optimize=1;
+Mesh.OptimizeNetgen=1;
+Mesh.OptimizeNetgen=1;
 
 
 If(mesh_type == 0)
