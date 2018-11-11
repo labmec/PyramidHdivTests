@@ -240,7 +240,7 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     
 
     REAL v = 1.0;
-    REAL a = 0.25;
+    REAL a = 0.1;
     
     REAL r = sqrt(x*x+y*y+z*z);
     REAL theta = acos(z/r);

@@ -20,7 +20,7 @@
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 3; 
+mesh_type = 1; 
 
 
 outer_r = 5.0; // reservoir radius
@@ -409,7 +409,11 @@ Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progres
 
 // Meshing directives for surfaces
 Transfinite Surface "*";
-Transfinite Volume "*";
+Transfinite Volume {structured[]};
+
+
+// 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
+Mesh.Algorithm3D = 4;
 
 EndIf
 
@@ -453,7 +457,7 @@ TransfQuadTri {v5,sv5}; // Directive to force the pyramids between volumes : v5 
 TransfQuadTri {v6,sv6}; // Directive to force the pyramids between volumes : v6 (quads) and iv1 (tri)
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
-Mesh.Algorithm3D = 4;
+Mesh.Algorithm3D = 2;
 
 EndIf
 
