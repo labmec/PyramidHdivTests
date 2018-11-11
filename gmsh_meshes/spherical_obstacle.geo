@@ -409,7 +409,7 @@ Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progres
 
 // Meshing directives for surfaces
 Transfinite Surface "*";
-Transfinite Volume {structured[]};
+//Transfinite Volume {structured[]};
 
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)

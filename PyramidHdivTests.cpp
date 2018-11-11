@@ -118,7 +118,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-int gIntegrationOrder = 5;
+int gIntegrationOrder = 6;
 
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
@@ -391,6 +391,8 @@ void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_e
 
 void CreateFlattenGeometry(TPZGeoMesh & gmesh);
 
+void UniformRefineTetrahedrons(TPZGeoMesh * gmesh, int n_ref);
+
 void FlipPyramids(TPZGeoMesh * gmesh);
 
 void TestingCondensation();
@@ -568,6 +570,76 @@ void TestingCondensation(){
     fCondensed.Print("Condensed = ",std::cout);
 }
 
+void UniformRefineTetrahedrons(TPZGeoMesh * gmesh, int n_ref){
+    
+    TPZAutoPointer<TPZRefPattern> refp3D;
+    
+    {// needed!
+        char buf[] =
+        "10 9 "
+        "-50 Tet0000111111111 "
+        "0 0 0 "
+        "1 0 0 "
+        "0 1 0 "
+        "0 0 1 "
+        "0.5 0 0 "
+        "0 0.5 0 "
+        "0 0 0.5 "
+        "0.5 0.5 0 "
+        "0 0.5 0.5 "
+        "0.5 0 0.5 "
+        "4 4 0  1  2  3 "
+        "4 4 0  4  5  6 "
+        "4 4 4  1  7  9 "
+        "4 4 7  2  5  8 "
+        "4 4 6  9  8  3 "
+        "4 4 4  9  6  5 "
+        "4 4 5  8  6  9 "
+        "4 4 7  8  9  5 "
+        "4 4 4  7  5  9 ";
+        std::istringstream str(buf);
+        refp3D = new TPZRefPattern(str);
+        refp3D->GenerateSideRefPatterns();
+        gRefDBase.InsertRefPattern(refp3D);
+        if(!refp3D)
+        {
+            DebugStop();
+        }
+    }
+    
+    //    TPZAutoPointer<TPZRefPattern> refp3D = gRefDBase.FindRefPattern("UnifTet");
+    
+    if(!refp3D)
+    {
+        DebugStop();
+    }
+    
+    TPZGeoEl * gel = NULL;
+    for(int r = 0; r < n_ref; r++)
+    {
+        int nels = gmesh->NElements();
+        for(int iel = 0; iel < nels; iel++)
+        {
+            gel = gmesh->ElementVec()[iel];
+            if(!gel) DebugStop();
+            if(gel->Dimension()==3)
+            {
+                gel->SetRefPattern(refp3D);
+                TPZVec<TPZGeoEl*> sons;
+                gel->Divide(sons);
+            }
+            if(gel->Dimension()==2)
+            {
+                //                gel->SetRefPattern(refp3D);
+                TPZVec<TPZGeoEl*> sons;
+                gel->Divide(sons);
+            }
+            
+        }
+    }
+    gmesh->BuildConnectivity();
+}
+
 int ComputeApproximation(TSimulationControl * sim_control)
 {
     
@@ -600,8 +672,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 24;
+    const int n_threads_assembly = 24;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -648,7 +720,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             /// Construction for L2 (pressure) approximation space
             meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
             
-            if (run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4)
+            bool has_pyramids_Q =
+            sim_control->m_geometry_type == ESphericalBarrierHePyTe ||
+            sim_control->m_geometry_type == EVerticalWellHePyTe ||
+            (sim_control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
+            
+            if ((run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4) && has_pyramids_Q)
             {
                 IncreasePyramidSonOrder(meshvecOrig,sim_control,p);
             }
@@ -1284,10 +1361,25 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             break;
     }
     
+    bool has_pyramids_Q =
+    sim_control->m_geometry_type == ESphericalBarrierHePyTe ||
+    sim_control->m_geometry_type == EVerticalWellHePyTe ||
+    (sim_control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
+    
     if (sim_control->m_geometry_type!=EAcademic) {
         // ------------------ Uniform Refining -------------------
-        UniformRefine(gmesh, h_ref_level);
-        if (run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ) {
+        
+        bool has_only_tetrahedra_Q =
+        sim_control->m_geometry_type == ESphericalBarrierTe ||
+        sim_control->m_geometry_type == EVerticalWellTe;
+        
+        if (has_only_tetrahedra_Q) {
+            UniformRefineTetrahedrons(gmesh, h_ref_level);
+        }else{
+            UniformRefine(gmesh, h_ref_level);
+        }
+        
+        if ((run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder) && has_pyramids_Q) {
             CreateFlattenGeometry(*gmesh);
             FlipPyramids(gmesh);
         }
@@ -1311,8 +1403,8 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
     ComputeCharacteristicHElSize(gmesh, h_min, n_elements);
     
     // ------------------ Dividing pyramids in tets -------------------
-    if(run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
-       run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4)
+    if((run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder ||
+       run_type == EDividedPyramid4 || run_type == EDividedPyramidIncreasedOrder4) && has_pyramids_Q)
     {
         DividePyramids(*gmesh);
         DivideBoundaryElements(*gmesh);
@@ -2819,9 +2911,9 @@ void UniformRefine(TPZGeoMesh* gmesh, int nDiv)
         {
             TPZVec< TPZGeoEl * > filhos;
             TPZGeoEl * gel = gmesh->ElementVec()[elem];
-//            if (!gel || gel->HasSubElement()) {
-//                continue;
-//            }
+            if (!gel || gel->HasSubElement()) {
+                continue;
+            }
             gel->Divide(filhos);
         }
     }
