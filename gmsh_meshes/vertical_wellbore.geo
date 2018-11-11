@@ -24,7 +24,7 @@ s = 4.0; // amplification factor for the wellbore box
 n_radial = 6;
 n_azimuthal = 6; 
 n_vertical = 1;
-n_wellbore = 4;
+n_wellbore = 6;
 n_v_wellbore = 1;
 radial_progression = 1.75;
 
@@ -36,7 +36,7 @@ radial_progression = 1.75;
 // // mesh_type = 2; // Prism dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 0; 
+mesh_type = 3; 
 
 Call MakeVerticalWellbore;
 

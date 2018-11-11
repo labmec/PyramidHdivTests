@@ -20,7 +20,7 @@
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 1; 
+mesh_type = 3; 
 
 
 outer_r = 5.0; // reservoir radius
