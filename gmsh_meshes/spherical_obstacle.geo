@@ -20,7 +20,7 @@
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 3; 
+mesh_type = 2; 
 
 
 outer_r = 5.0; // reservoir radius
@@ -32,10 +32,10 @@ s = 5.0; // amplification factor for the wellbore box
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
-n_sphere = 3;
-n_structured = 3;
+n_sphere = 4;
+n_structured = 4;
 n_radial = 4;
-n_i_radial = 2;
+n_i_radial = 4;
 radial_progression = 1.25;
 
 x_length = 1.0;
@@ -439,7 +439,7 @@ Transfinite Line {ibox_ribs[],obox_ribs[],spherical_ribs[]} = n_structured;
 Transfinite Line {radial_ribs[]} =  n_radial Using Progression radial_progression;
 radial_progression = 0.75*radial_progression;
 Transfinite Line {sradial_ribs[]} =  n_i_radial Using Progression radial_progression;
-Transfinite Surface "*";
+//Transfinite Surface "*";
 
 
 // Meshing directives for surfaces
@@ -457,7 +457,7 @@ TransfQuadTri {v5,sv5}; // Directive to force the pyramids between volumes : v5 
 TransfQuadTri {v6,sv6}; // Directive to force the pyramids between volumes : v6 (quads) and iv1 (tri)
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
-Mesh.Algorithm3D = 2;
+Mesh.Algorithm3D = 4;
 
 EndIf
 

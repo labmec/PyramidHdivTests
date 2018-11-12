@@ -129,8 +129,8 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-#define Solution_Dupuit_Thiem
-//#define Solution_Spherical_Barrier
+//#define Solution_Dupuit_Thiem
+#define Solution_Spherical_Barrier
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -672,8 +672,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 64;
-    const int n_threads_assembly = 64;
+    const int n_threads_error = 32;
+    const int n_threads_assembly = 32;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
