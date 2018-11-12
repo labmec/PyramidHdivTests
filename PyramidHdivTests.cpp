@@ -129,8 +129,8 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-//#define Solution_Dupuit_Thiem
-#define Solution_Spherical_Barrier
+#define Solution_Dupuit_Thiem
+//#define Solution_Spherical_Barrier
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
