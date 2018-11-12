@@ -17,7 +17,7 @@ Mesh.CharacteristicLengthFromCurvature = 0;
 Mesh.CharacteristicLengthFromPoints = 0;
 
 
-Merge "Boeing_737_800.IGS";
+Merge "Boeing_737_800_Geometry_for_mesh.IGS";
 CreateTopology;
 
 B737P[] = Point "*";
