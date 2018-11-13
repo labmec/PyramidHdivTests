@@ -1,21 +1,3 @@
-
-// ---- Gmsh Script ----
-// ---- Vertical wellbore wih hybrid 3D mesh  ----
-// Created 01/02/2018 by Omar Durán
-// Labmec, University of Campinas
-// --------------------------------------------
-
-SetFactory("OpenCASCADE");
-
-Mesh.Algorithm=1; // 2D mesh algorithm  (1) MeshAdapt (default)(5) Delaunay (6) Frontal
-Mesh.ElementOrder=1; // 1=linear elements, N (<6) = elements of higher order
-Geometry.OCCSewFaces = 1;
-Merge "air_craft.msh";
-//Merge "benchmarks_3d_Falcon_SurfaceMeshAnisoCurvature.stl";
-CreateTopology;
-
-
-
 // points
 
 Point(2)={-1.37177,0.592146,0.272342};
@@ -446,8 +428,10 @@ internal_ribs[]={203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218
 Physical Line("InternalRibs") = {internal_ribs[]};
 Physical Line("ExtenalRibs") = {mplane_ribs[]};
 imfalconoll  = newll; Line Loop(imfalconoll) = {internal_ribs[]};
-//omfalconill  = newll; Line Loop(omfalconill) = {mplane_ribs[]};
+omfalconill  = newll; Line Loop(omfalconill) = {mplane_ribs[]};
 
-falconplane  = news; Surface(falconplane) = {imfalconoll}; // Bottom unstructured region
+i_falconplane  = news; Compound Surface(i_falconplane) = {imfalconoll}; // Bottom unstructured region
+//o_falconplane  = news; Surface(o_falconplane) = {omfalconill}; // Bottom unstructured region
+
 
 
