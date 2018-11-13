@@ -6,9 +6,9 @@ SetFactory("OpenCASCADE");
 Mesh.Algorithm=4; //(1=MeshAdapt, 2=Automatic, 5=Delaunay, 6=Frontal, 7=bamg, 8=delquad)
 
 
-csm = 0.1;
-cs = 5.0;
-
+csm = 0.01;
+cs = 10.0;
+Geometry.Tolerance = 1e-3; // adjust value here for correct merge result
 Mesh.CharacteristicLengthMin = csm;
 Mesh.CharacteristicLengthMax = cs;
 Mesh.LcIntegrationPrecision = 1.e-5;
@@ -18,8 +18,12 @@ Mesh.CharacteristicLengthFromCurvature = 0;
 Mesh.CharacteristicLengthFromPoints = 0;
 
 
+Mesh.Algorithm=1; // 2D mesh algorithm  (1) MeshAdapt (default)(5) Delaunay (6) Frontal
+Mesh.ElementOrder=1; // 1=linear elements, N (<6) = elements of higher order
+Geometry.OCCSewFaces = 1;
 Merge "f16.STEP";
 CreateTopology;
+
 
 F16p[] = Point "*";
 
@@ -76,7 +80,18 @@ Recursive Delete {
 }
 
 //Cleaning mid planes
-Delete{ Surface{mid_plane[]};}
+Delete{ Surface{325,370,mid_plane[]};}
+
+// Smoothing and reparying the geometry
+//Point{16} = Point{18};
+
+Coherence;
+
+
+
+
+f16_x_0_lower_ribs[] = {287,23,-293,-290,-283,282,271,278};
+Physical Line("LRibs") = {f16_x_0_lower_ribs[]};
 
 F16lines[] = Line "*";
 Compound Line {F16lines[]};
@@ -86,5 +101,7 @@ Compound Surface {F16surf[]};
 
 HalfofF16s[] =  Surface "*";
 Physical Surface("F16") = {HalfofF16s[]};
+
+
 
 

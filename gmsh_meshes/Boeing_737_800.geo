@@ -17,7 +17,11 @@ Mesh.CharacteristicLengthFromCurvature = 0;
 Mesh.CharacteristicLengthFromPoints = 0;
 
 
+Mesh.Algorithm=6; // 2D mesh algorithm  (1) MeshAdapt (default)(5) Delaunay (6) Frontal
+Mesh.ElementOrder=1; // 1=linear elements, N (<6) = elements of higher order
+//Geometry.OCCSewFaces = 1;
 Merge "Boeing_737_800.IGS";
+
 CreateTopology;
 
 B737P[] = Point "*";
