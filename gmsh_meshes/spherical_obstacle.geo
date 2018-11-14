@@ -20,7 +20,7 @@
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 1; 
+mesh_type = 3; 
 
 
 outer_r = 5.0; // reservoir radius
@@ -469,6 +469,14 @@ Physical Surface("outer_bc") = {obox_boundaries[]};
 Physical Surface("inner_bc") = {spherical_hole[]};
 
 
+All_lines[] = Line "*";
+All_surfaces[] = Surface "*";
+All_volumes[] = Volume "*";
+
+Color Red{Surface{All_lines[]};}
+Color Yellow{Surface{All_surfaces[]};}
+Color Yellow{Volume{All_volumes[]};}
+
 // optimize the mesh
 Mesh.Optimize = 1;
 Mesh  3;
@@ -485,6 +493,8 @@ EndIf
 If(mesh_type == 3)
 Save "./spherical_obstacle_hybrid.msh";
 EndIf
+
+
 
 
 

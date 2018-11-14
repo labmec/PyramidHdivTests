@@ -36,7 +36,8 @@ radial_progression = 1.75;
 // // mesh_type = 2; // Prism dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 1; 
+mesh_type = 3; 
 
 Call MakeVerticalWellbore;
+
 
