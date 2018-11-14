@@ -20,27 +20,27 @@
 // // mesh_type = 2; // Hexahedra dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 2; 
+mesh_type = 1; 
 
 
 outer_r = 5.0; // reservoir radius
 inner_r = 0.1; // wellbore radius
 h = 1; // vertical lenght
-s = 5.0; // amplification factor for the wellbore box
+s = 0.75; // amplification factor for the wellbore box
 
 ////////////////////////////////////////////////////////////////
 // Mesh Parameters
 ///////////////////////////////////////////////////////////////
 
-n_sphere = 4;
-n_structured = 4;
-n_radial = 4;
+n_sphere = 3;
+n_structured = 3;
+n_radial = 3;
 n_i_radial = 4;
-radial_progression = 1.25;
+radial_progression = 2.0;
 
-x_length = 1.0;
-y_length = 1.0;
-z_length = 1.0;
+x_length = 1.0*s;
+y_length = 1.0*s;
+z_length = 1.0*s;
 
 o_x_length = 5.0;
 o_y_length = 5.0;

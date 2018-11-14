@@ -118,7 +118,7 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-int gIntegrationOrder = 6;
+int gIntegrationOrder = 5;
 
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
@@ -129,8 +129,8 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-#define Solution_Dupuit_Thiem
-//#define Solution_Spherical_Barrier
+//#define Solution_Dupuit_Thiem
+#define Solution_Spherical_Barrier
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -672,11 +672,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 32;
-    const int n_threads_assembly = 32;
+    const int n_threads_error = 24;
+    const int n_threads_assembly = 24;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
+    
     
     
     TPZAutoPointer<TPZRefPattern> pyramid_ref_pattern;
@@ -754,11 +755,11 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
                 TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
                 TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-//                hybrid.GroupElements(cmeshMultHybrid);
+                hybrid.GroupElements(cmeshMultHybrid);
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
                 
-                CheckNormalContinuity(meshvec[0]);
+//                CheckNormalContinuity(meshvec[0]);
                 
             }
             else
