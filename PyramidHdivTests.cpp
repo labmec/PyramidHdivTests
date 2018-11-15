@@ -123,7 +123,7 @@ int gIntegrationOrder = 6;
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
-#define MultipleMeshes_Q
+//#define MultipleMeshes_Q
 //#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
@@ -673,8 +673,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 24;
-    const int n_threads_assembly = 24;
+    const int n_threads_error = 64;
+    const int n_threads_assembly = 64;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -810,7 +810,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
 #endif
             // ------------------ Assembling -------------------
-//            an.Assemble();
+            an.Assemble();
 #ifdef USING_BOOST
             boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
             assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
@@ -825,7 +825,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
-//            an.Solve();
+            an.Solve();
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
@@ -865,7 +865,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
 #endif
-//            an.PostProcessError(errors,false);
+            an.PostProcessError(errors,false);
 #ifdef USING_BOOST
             boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -969,6 +969,24 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
             DebugStop();
             break;
     }
+    
+    bool has_pyramids_Q =
+    control->m_geometry_type == ESphericalBarrierHePyTe ||
+    control->m_geometry_type == EVerticalWellHePyTe ||
+    (control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
+    
+    
+    if (!has_pyramids_Q) {
+        bool has_only_tetrahedra_Q =
+        control->m_geometry_type == ESphericalBarrierTe ||
+        control->m_geometry_type == EVerticalWellTe;
+        if (has_only_tetrahedra_Q) {
+            type = "Conformal tetrahedral mesh.";
+        }else{
+            type = "Conformal hexahedral mesh.";
+        }
+    }
+    
     return type;
 }
 

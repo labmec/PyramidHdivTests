@@ -115,8 +115,8 @@ Transfinite Line {outer_h_edges[],box_h_edges[]} = n_azimuthal; // Azimuthal con
 Transfinite Line {box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
 //Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
 Transfinite Surface "*";
-Transfinite Volume "*";
-//Transfinite Volume {reservoir[],wellbore_region[]};
+//Transfinite Volume "*";
+//Transfinite Volume {reservoir[]};
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
 Mesh.Algorithm3D = 4;
@@ -202,7 +202,7 @@ Physical Surface("inner_bc") = {wellbore_bc[]};
 Physical Surface("non_flux_bc") = {top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
 
 
-Another_entities = 1;
+Another_entities = 0;
 If(Another_entities)
 Physical Surface("non_flux_res") = {top_bottom_reservoir_bc[]};
 Physical Surface("non_flux_well") = {top_bottom_wellbore_region_bc[]};
