@@ -23,7 +23,7 @@ s = 5.0; // amplification factor for the wellbore box
 
 n = 0;
 
-n_radial_wb = 6 + n;
+n_radial_wb = 4 + n;
 n_radial = 6 + n;
 n_azimuthal = 4 + n; 
 n_vertical = 1;

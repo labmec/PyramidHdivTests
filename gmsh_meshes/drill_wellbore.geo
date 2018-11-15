@@ -109,12 +109,13 @@ reservoir[]={5,6,7,8};
 If(mesh_type == 0)
 
 // Meshing directives for lines
-Transfinite Line {box_radial_edges[]} = n_radial Using Progression radial_progression_wb; // Radial control for wellbore
+Transfinite Line {box_radial_edges[]} = n_radial_wb Using Progression radial_progression_wb; // Radial control for wellbore
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
 //Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
 Transfinite Surface "*";
+Transfinite Volume "*";
 //Transfinite Volume {reservoir[],wellbore_region[]};
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
@@ -126,7 +127,7 @@ EndIf
 If(mesh_type == 1)
 
 // Meshing directives for lines
-Transfinite Line {box_radial_edges[]} = n_radial Using Progression radial_progression_wb; // Radial control for wellbore
+Transfinite Line {box_radial_edges[]} = n_radial_wb Using Progression radial_progression_wb; // Radial control for wellbore
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[],wellbore_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {outer_v_edges[],box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
@@ -145,7 +146,7 @@ EndIf
 If(mesh_type == 2)
 
 // Meshing directives for lines
-Transfinite Line {box_radial_edges[]} = n_radial Using Progression radial_progression_wb; // Radial control for wellbore
+Transfinite Line {box_radial_edges[]} = n_radial_wb Using Progression radial_progression_wb; // Radial control for wellbore
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[],wellbore_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {outer_v_edges[],box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
@@ -153,6 +154,7 @@ Transfinite Line {outer_v_edges[],box_v_edges[],wellbore_v_edges[]} = n_vertical
 // Meshing directives for surfaces
 //Transfinite Surface{mid_surf[],reservoir_bc[],wellbore_bc[]};
 Transfinite Surface "*";
+Transfinite Volume "*";
 Recombine Surface{mid_surf[],reservoir_bc[],wellbore_bc[]};
 
 
@@ -162,7 +164,7 @@ EndIf
 If(mesh_type == 3)
 
 // Meshing directives for lines
-Transfinite Line {box_radial_edges[]} = n_radial Using Progression radial_progression_wb; // Radial control for wellbore
+Transfinite Line {box_radial_edges[]} = n_radial_wb Using Progression radial_progression_wb; // Radial control for wellbore
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {outer_v_edges[],box_v_edges[]} = n_vertical; // Vertical control
@@ -170,6 +172,7 @@ Transfinite Line {outer_v_edges[],box_v_edges[]} = n_vertical; // Vertical contr
 // Meshing directives for surfaces
 //Transfinite Surface{mid_surf[],reservoir_bc[],top_bottom_reservoir_bc[]};
 Transfinite Surface "*";
+Transfinite Volume "*";
 Recombine Surface{mid_surf_rad[],top_bottom_reservoir_bc[],reservoir_bc[]};
 
 
