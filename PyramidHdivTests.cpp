@@ -118,19 +118,20 @@ void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
 
-int gIntegrationOrder = 5;
+int gIntegrationOrder = 6;
 
 /// Print Volumetric elements
 void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 
+#define MultipleMeshes_Q
 //#define Solution_Sine
 //#define Solution_MonoFourthOrder
 //#define Solution_MonoCubic
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-//#define Solution_Dupuit_Thiem
-#define Solution_Spherical_Barrier
+#define Solution_Dupuit_Thiem
+//#define Solution_Spherical_Barrier
 
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
     
@@ -429,9 +430,9 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements){
+void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_max, int & n_elements){
     
-    h_min   = 1.0;
+    h_max   = 1.0;
     n_elements = 0;
     
     REAL h;
@@ -452,8 +453,8 @@ void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_e
         
         h = gel->CharacteristicSize();
         
-        if (h < h_min) {
-            h_min = h;
+        if (h < h_max) {
+            h_max = h;
         }
     }
     
@@ -809,7 +810,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
             boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
 #endif
             // ------------------ Assembling -------------------
-            an.Assemble();
+//            an.Assemble();
 #ifdef USING_BOOST
             boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
             assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
@@ -824,7 +825,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
 #endif
-            an.Solve();
+//            an.Solve();
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
@@ -864,7 +865,7 @@ int ComputeApproximation(TSimulationControl * sim_control)
 #ifdef USING_BOOST
             boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
 #endif
-            an.PostProcessError(errors,false);
+//            an.PostProcessError(errors,false);
 #ifdef USING_BOOST
             boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
 #endif
@@ -1305,7 +1306,11 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             TPZGmshReader Geometry;
             REAL s = 1.0;
             Geometry.SetfDimensionlessL(s);
+#ifdef MultipleMeshes_Q
+            std::string gmsh_file = "vertical_wellbore_He_" + std::to_string(h_ref_level) + ".msh";
+#else
             std::string gmsh_file("vertical_wellbore_He.msh");
+#endif
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
         }
@@ -1314,7 +1319,11 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             TPZGmshReader Geometry;
             REAL s = 1.0;
             Geometry.SetfDimensionlessL(s);
+#ifdef MultipleMeshes_Q
+            std::string gmsh_file = "vertical_wellbore_Te_" + std::to_string(h_ref_level) + ".msh";
+#else
             std::string gmsh_file("vertical_wellbore_Te.msh");
+#endif
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
             
         }
@@ -1323,7 +1332,12 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
             TPZGmshReader Geometry;
             REAL s = 1.0;
             Geometry.SetfDimensionlessL(s);
+            
+#ifdef MultipleMeshes_Q
+            std::string gmsh_file = "vertical_wellbore_hybrid_" + std::to_string(h_ref_level) + ".msh";
+#else
             std::string gmsh_file("vertical_wellbore_hybrid.msh");
+#endif
             gmesh = Geometry.GeometricGmshMesh(gmsh_file);
         
         }
@@ -1367,24 +1381,32 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
     sim_control->m_geometry_type == EVerticalWellHePyTe ||
     (sim_control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
     
+
+    
     if (sim_control->m_geometry_type!=EAcademic) {
         // ------------------ Uniform Refining -------------------
+
+#ifndef MultipleMeshes_Q
         
         bool has_only_tetrahedra_Q =
         sim_control->m_geometry_type == ESphericalBarrierTe ||
         sim_control->m_geometry_type == EVerticalWellTe;
-        
+    
         if (has_only_tetrahedra_Q) {
             UniformRefineTetrahedrons(gmesh, h_ref_level);
         }else{
             UniformRefine(gmesh, h_ref_level);
         }
         
+#endif
+        
         if ((run_type == EDividedPyramid || run_type == EDividedPyramidIncreasedOrder) && has_pyramids_Q) {
             CreateFlattenGeometry(*gmesh);
             FlipPyramids(gmesh);
         }
     }
+    
+
     
 #ifdef PZDEBUG
             if (!gmesh)

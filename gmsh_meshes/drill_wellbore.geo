@@ -116,8 +116,8 @@ If(mesh_type == 0)
 Transfinite Line {radial_edges[]} = n_radial Using Progression radial_progression; // Radial control
 Transfinite Line {outer_h_edges[],box_h_edges[]} = n_azimuthal; // Azimuthal control
 Transfinite Line {box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
-Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
-//Transfinite Surface "*";
+//Transfinite Surface {top_bottom_reservoir_bc[],mid_surf_box[],mid_surf_rad[]};
+Transfinite Surface "*";
 //Transfinite Volume {reservoir[],wellbore_region[]};
 
 // 3D mesh algorithm (1=Delaunay, 2=New Delaunay, 4=Frontal, 5=Frontal Delaunay, 6=Frontal Hex, 7=MMG3D, 9=R-tree)
@@ -152,7 +152,8 @@ Transfinite Line {outer_h_edges[],box_h_edges[],wellbore_h_edges[]} = n_azimutha
 Transfinite Line {outer_v_edges[],box_v_edges[],wellbore_v_edges[]} = n_vertical; // Vertical control
 
 // Meshing directives for surfaces
-Transfinite Surface{mid_surf[],reservoir_bc[],wellbore_bc[]};
+//Transfinite Surface{mid_surf[],reservoir_bc[],wellbore_bc[]};
+Transfinite Surface "*";
 Recombine Surface{mid_surf[],reservoir_bc[],wellbore_bc[]};
 
 
@@ -212,31 +213,5 @@ Physical Line("radial_edges") = {radial_edges[]};
 EndIf
 
 
-Coherence;
-Geometry.Tolerance=1e-05;
-Coherence Mesh;
-
-// optimize the mesh
-Mesh  3;
-Mesh.Optimize=1;
-Mesh.OptimizeNetgen=1;
-Mesh.OptimizeNetgen=1;
-
-
-If(mesh_type == 0)
-Save "./vertical_wellbore_Te.msh";
-EndIf
-
-If(mesh_type == 1)
-Save "./vertical_wellbore_He.msh";
-EndIf
-
-If(mesh_type == 2)
-Save "./vertical_wellbore_Pe.msh";
-EndIf
-
-If(mesh_type == 3)
-Save "./vertical_wellbore_hybrid.msh";
-EndIf
 
 Return
