@@ -23,11 +23,13 @@ s = 5.0; // amplification factor for the wellbore box
 
 n = 0;
 
+n_radial_wb = 6 + n;
 n_radial = 6 + n;
 n_azimuthal = 4 + n; 
 n_vertical = 1;
 n_wellbore = 4 + n;
 n_v_wellbore = 1;
+radial_progression_wb = 1.25;
 radial_progression = 1.75;
 
 ////////////////////////////////////////////////////////////////
@@ -38,13 +40,13 @@ radial_progression = 1.75;
 // // mesh_type = 2; // Prism dominated
 // // mesh_type = 3; // Hybrid {Pyramids,Hexahdra,Tetrahedra}
 
-mesh_type = 1; 
+mesh_type = 3; 
 
 Call MakeVerticalWellbore;
 
-Coherence;
-Geometry.Tolerance=1e-05;
-Coherence Mesh;
+//Coherence;
+//Geometry.Tolerance=1e-05;
+//Coherence Mesh;
 
 // optimize the mesh
 //Mesh  3;
