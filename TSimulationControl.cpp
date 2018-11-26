@@ -7,16 +7,10 @@
 
 #include "TSimulationControl.h"
 
+EGeometryType gCurrentRun = EAcademic;
 
 TSimulationControl::TSimulationControl(){
-    
-    m_run_type          = EDividedPyramidIncreasedOrder4;
-    m_geometry_type     = EAcademic;
-    m_h_levels          = 3;
-    m_red_black_stride_Q  = true;
-    m_p_levels          = 1;
-    m_Hdiv_plusplus_Q   = false;
-    m_draw_vtk_Q        = true;
+   // all variables are initialized in the declaration
     
 }
 
@@ -32,7 +26,8 @@ TSimulationControl::TSimulationControl(char *argv[]){
     int p_levels          = atoi(argv[4]);
     bool Hdiv_plusplus_Q   = atoi(argv[5]);
     bool draw_vtk_Q        = atoi(argv[6]);
-
+    bool hybrid            = atoi(argv[7]);
+    bool dry_run           = atoi(argv[8]);
     bool red_black_stride_Q;
     if (run_type == ETetrahedra || geometry_type != EAcademic) {
         red_black_stride_Q = false;
@@ -48,7 +43,8 @@ TSimulationControl::TSimulationControl(char *argv[]){
     m_p_levels          = p_levels;
     m_Hdiv_plusplus_Q   = Hdiv_plusplus_Q;
     m_draw_vtk_Q        = draw_vtk_Q;
-    
+    m_hybrid            = hybrid;
+    m_dry_run           = dry_run;
     
     
 }
@@ -62,6 +58,8 @@ TSimulationControl::TSimulationControl(const TSimulationControl &other){
     m_p_levels          = other.m_p_levels;
     m_Hdiv_plusplus_Q   = other.m_Hdiv_plusplus_Q;
     m_draw_vtk_Q        = other.m_draw_vtk_Q;
+    m_dry_run           = other.m_dry_run;
+    m_hybrid            = other.m_hybrid;
     
 }
 
@@ -75,6 +73,8 @@ TSimulationControl & TSimulationControl::operator=(const TSimulationControl &oth
         m_p_levels          = other.m_p_levels;
         m_Hdiv_plusplus_Q   = other.m_Hdiv_plusplus_Q;
         m_draw_vtk_Q        = other.m_draw_vtk_Q;
+        m_dry_run           = other.m_dry_run;
+        m_hybrid            = other.m_hybrid;
     }
     
     return *this;
@@ -83,11 +83,16 @@ TSimulationControl & TSimulationControl::operator=(const TSimulationControl &oth
 
 void TSimulationControl::Print(std::ostream &out){
     
-    out << "m_run_type            = " << m_run_type <<std::endl;
-    out << "m_geometry_type       = " << m_geometry_type <<std::endl;
+    out << "m_run_type            = " << m_run_type << " " << RunType() << std::endl;
+    out << "m_geometry_type       = " << m_geometry_type << " " << MeshGeometry() << std::endl;
     out << "m_h_levels            = " << m_h_levels <<std::endl;
     out << "m_red_black_stride_Q  = " << m_red_black_stride_Q <<std::endl;
     out << "m_p_levels            = " << m_p_levels <<std::endl;
     out << "m_Hdiv_plusplus_Q     = " << m_Hdiv_plusplus_Q <<std::endl;
     out << "m_draw_vtk_Q          = " << m_draw_vtk_Q <<std::endl;
+    out << "m_hybrid              = " << m_hybrid << std::endl;
+    out << "m_dry_run             = " << m_dry_run;
+    if(m_dry_run == true) out << " results were not computed";
+    out << std::endl;
+    
 }

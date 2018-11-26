@@ -54,6 +54,7 @@
 #include "pzshapetriang.h"
 #include "TPZRefPattern.h"
 #include "tpzgeoelrefpattern.h"
+#include "TPZVTKGeoMesh.h"
 
 // Simulation Control
 #include "TSimulationControl.h"
@@ -111,12 +112,17 @@ TPZAutoPointer<TPZRefPattern> PyramidTo4Tetrahedra();
 
 void DividePyramids(TPZGeoMesh &gmesh);
 
+void GroupPyramidElements(TPZCompMesh *cmesh);
+
 void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control, int pFlux);
 
 void DivideBoundaryElements(TPZGeoMesh &gmesh, int exceptmatid = 3);
 
 /// verify if the pressure space is compatible with the flux space
 void VerifyDRhamCompatibility(TSimulationControl * control);
+
+/// verify if the approximation space for the flux is compatible with the approximation space of the pressure
+void VerifyApproximationSpaceConsistency(TPZVec<TPZCompMesh *> &meshvec);
 
 int gIntegrationOrder = 6;
 
@@ -130,21 +136,25 @@ void PrintGeometryVols(TPZGeoMesh * gmesh, std::stringstream & file_name);
 //#define Solution_TriQuadratic
 //#define Solution_MonoQuadratic
 //#define Solution_MonoLinear
-#define Solution_Dupuit_Thiem
+//#define Solution_Dupuit_Thiem
 //#define Solution_Spherical_Barrier
 
+
+
 void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_and_f){
+
     
     flux_and_f.Resize(4, 1);
-#ifdef Solution_Sine
-    // Sine problem
-    u[0] = sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    flux_and_f(0,0) = -M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    flux_and_f(1,0) = -M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
-    flux_and_f(2,0) = -M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
-    flux_and_f(3,0) = 3*pow(M_PI,2)*sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
-    return;
-#endif
+    switch(gCurrentRun)
+    {
+        case EAcademic:
+        // Sine problem
+        u[0] = sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+        flux_and_f(0,0) = -M_PI*cos(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+        flux_and_f(1,0) = -M_PI*cos(M_PI*pt[1])*sin(M_PI*pt[0])*sin(M_PI*pt[2]);
+        flux_and_f(2,0) = -M_PI*cos(M_PI*pt[2])*sin(M_PI*pt[0])*sin(M_PI*pt[1]);
+        flux_and_f(3,0) = 3*pow(M_PI,2)*sin(M_PI*pt[0])*sin(M_PI*pt[1])*sin(M_PI*pt[2]);
+        return;
     
 #ifdef Solution_MonoFourthOrder
     // x^4
@@ -195,92 +205,96 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
     flux_and_f(3,0) = 0.0;
     return;
 #endif
-    
-#ifdef Solution_Dupuit_Thiem
-    REAL x = pt[0];
-    REAL y = pt[1];
-    
-    flux_and_f.Resize(4,1);
-    
-    REAL r0 = 100.0;
-    REAL r = sqrt(x*x+y*y);
-    REAL theta = atan2(y,x);
-    
-    REAL costheta = cos(theta);
-    REAL sintheta = sin(theta);
-    
-    // Gradient computations
-    REAL Radialunitx = costheta;
-    REAL Radialunity = sintheta;
-    REAL Radialunitz = 0.0;
-    
-    REAL Thetaunitx = -sintheta;
-    REAL Thetaunity = costheta;
-    REAL Thetaunitz = 0.0;
-    
-    u[0] = 20 + log(r/r0);
-    
-    REAL dfdr = 1.0/r;
-    REAL dfdTheta = 0.0;
-    
-    flux_and_f(0,0) = -1.0*(dfdr * Radialunitx + dfdTheta * Thetaunitx);
-    flux_and_f(1,0) = -1.0*(dfdr * Radialunity + dfdTheta * Thetaunity);
-    flux_and_f(2,0) = -1.0*(dfdr * Radialunitz + dfdTheta * Thetaunitz);
-    
-    flux_and_f(3,0) = 0.0;
-    return;
-#endif
-    
-#ifdef Solution_Spherical_Barrier
-    
-    REAL x = pt[0];
-    REAL y = pt[1];
-    REAL z = pt[2];
-    
-    flux_and_f.Resize(4,1);
-    
 
-    REAL v = 1.0;
-    REAL a = 0.1;
+        case EVerticalWellHe:
+        case EVerticalWellHePyTe:
+        case EVerticalWellTe:
+        {
+            REAL x = pt[0];
+            REAL y = pt[1];
+            
+            flux_and_f.Resize(4,1);
+            
+            REAL r0 = 100.0;
+            REAL r = sqrt(x*x+y*y);
+            REAL theta = atan2(y,x);
+            
+            REAL costheta = cos(theta);
+            REAL sintheta = sin(theta);
+            
+            // Gradient computations
+            REAL Radialunitx = costheta;
+            REAL Radialunity = sintheta;
+            REAL Radialunitz = 0.0;
+            
+            REAL Thetaunitx = -sintheta;
+            REAL Thetaunity = costheta;
+            REAL Thetaunitz = 0.0;
+            
+            u[0] = 20 + log(r/r0);
+            
+            REAL dfdr = 1.0/r;
+            REAL dfdTheta = 0.0;
+            
+            flux_and_f(0,0) = -1.0*(dfdr * Radialunitx + dfdTheta * Thetaunitx);
+            flux_and_f(1,0) = -1.0*(dfdr * Radialunity + dfdTheta * Thetaunity);
+            flux_and_f(2,0) = -1.0*(dfdr * Radialunitz + dfdTheta * Thetaunitz);
+            
+            flux_and_f(3,0) = 0.0;
+            return;
+        }
+        case ESphericalBarrierHe:
+        case ESphericalBarrierHePyTe:
+        case ESphericalBarrierTe:
+        {
     
-    REAL r = sqrt(x*x+y*y+z*z);
-    REAL theta = acos(z/r);
-    REAL phi = atan2(y,x);
-    
-    REAL costheta = cos(theta);
-    REAL sintheta = sin(theta);
-    REAL sinphi = sin(phi);
-    REAL cosphi = cos(phi);
-    
-    
-    REAL p = -(1.0/(2.0*r*r))*((a*a*a) + 2*(r*r*r))*v*costheta;
-    REAL dpdr = ((a*a*a)/(r*r*r) - 1.0)*v*costheta;
-    REAL dpdTheta = 0.5*((a*a*a)/(r*r*r) + 2.0)*v*sintheta;
-    REAL dpdPhi = 0.0;
-    
-    // Gradient computations
-    REAL Radialunitx = sintheta*cosphi;
-    REAL Radialunity = sintheta*sinphi;
-    REAL Radialunitz = costheta;
+            REAL x = pt[0];
+            REAL y = pt[1];
+            REAL z = pt[2];
+            
+            flux_and_f.Resize(4,1);
+            
 
-    REAL Thetaunitx = cosphi*costheta;
-    REAL Thetaunity = costheta*sinphi;
-    REAL Thetaunitz = -sintheta;
+            REAL v = 1.0;
+            REAL a = 0.1;
+            
+            REAL r = sqrt(x*x+y*y+z*z);
+            REAL theta = acos(z/r);
+            REAL phi = atan2(y,x);
+            
+            REAL costheta = cos(theta);
+            REAL sintheta = sin(theta);
+            REAL sinphi = sin(phi);
+            REAL cosphi = cos(phi);
+            
+            
+            REAL p = -(1.0/(2.0*r*r))*((a*a*a) + 2*(r*r*r))*v*costheta;
+            REAL dpdr = ((a*a*a)/(r*r*r) - 1.0)*v*costheta;
+            REAL dpdTheta = 0.5*((a*a*a)/(r*r*r) + 2.0)*v*sintheta;
+            REAL dpdPhi = 0.0;
+            
+            // Gradient computations
+            REAL Radialunitx = sintheta*cosphi;
+            REAL Radialunity = sintheta*sinphi;
+            REAL Radialunitz = costheta;
 
-    REAL Phiunitx = -sinphi;
-    REAL Phiunity = cosphi;
-    REAL Phiunitz = 0.0;
-    
-    u[0] = p;
-    
-    flux_and_f(0,0) = -1.0*(dpdr * Radialunitx + dpdTheta * Thetaunitx + dpdPhi * Phiunitx);
-    flux_and_f(1,0) = -1.0*(dpdr * Radialunity + dpdTheta * Thetaunity + dpdPhi * Phiunity);
-    flux_and_f(2,0) = -1.0*(dpdr * Radialunitz + dpdTheta * Thetaunitz + dpdPhi * Phiunitz);
-    
-    flux_and_f(3,0) = 0.0;
+            REAL Thetaunitx = cosphi*costheta;
+            REAL Thetaunity = costheta*sinphi;
+            REAL Thetaunitz = -sintheta;
 
-#endif
-    
+            REAL Phiunitx = -sinphi;
+            REAL Phiunity = cosphi;
+            REAL Phiunitz = 0.0;
+            
+            u[0] = p;
+            
+            flux_and_f(0,0) = -1.0*(dpdr * Radialunitx + dpdTheta * Thetaunitx + dpdPhi * Phiunitx);
+            flux_and_f(1,0) = -1.0*(dpdr * Radialunity + dpdTheta * Thetaunity + dpdPhi * Phiunity);
+            flux_and_f(2,0) = -1.0*(dpdr * Radialunitz + dpdTheta * Thetaunitz + dpdPhi * Phiunitz);
+            
+            flux_and_f(3,0) = 0.0;
+        }
+    }    
 }
 
 void AnalyticPotential(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
@@ -368,7 +382,7 @@ int ConvergenceTest(TSimulationControl * control);
 
 void ComputeConvergenceRates(TPZVec<REAL> &error, TPZVec<REAL> &h_size, TPZVec<REAL> &convergence);
 
-int ComputeApproximation(TSimulationControl * sim_control);
+int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output);
 
 TPZGeoMesh * GeometryConstruction(int n_h_ref_level, REAL & h_min, int & n_elements, TSimulationControl * sim_control);
 
@@ -410,23 +424,38 @@ int main(int argc, char *argv[])
 //    FileName += "pyramlogfile.cfg";
     InitializePZLOG();
 #endif
-    
+    gRefDBase.InitializeAllUniformRefPatterns();
 //    TestingCondensation();
 //    return 0;
     
     TSimulationControl * sim_control = NULL;
-    if(argc != 7){
+    if(argc != 9){
         sim_control = new TSimulationControl;
-        sim_control->m_run_type = EHexaHedra;
-        sim_control->m_h_levels = 3;
+        sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
+        sim_control->m_geometry_type = EAcademic;
+        sim_control->m_geometry_type = EVerticalWellHePyTe;
+        sim_control->m_geometry_type = ESphericalBarrierHePyTe;
+        sim_control->m_geometry_type = ESphericalBarrierHe;
+        sim_control->m_geometry_type = ESphericalBarrierTe;
+        sim_control->m_geometry_type = EVerticalWellHePyTe;
+        sim_control->m_geometry_type = EVerticalWellHe;
+        sim_control->m_geometry_type = EVerticalWellTe;
+        sim_control->m_red_black_stride_Q = true;
+        sim_control->m_h_levels = 1;
+        sim_control->m_p_levels = 1;
+        sim_control->m_Hdiv_plusplus_Q = false;
+        sim_control->m_hybrid = true;
+        sim_control->m_dry_run = false;
     }
-    else{
+    else
+    {
         sim_control = new TSimulationControl(argv);
     }
+    gCurrentRun = sim_control->m_geometry_type;
     std::cout << "Simulation control object with parameters " << std::endl;
     sim_control->Print();
-    
-    ComputeApproximation(sim_control);
+    std::ofstream output("convergence_summary.txt",std::ios::app);
+    ComputeApproximation(sim_control, output);
     return 0;
 }
 
@@ -641,14 +670,13 @@ void UniformRefineTetrahedrons(TPZGeoMesh * gmesh, int n_ref){
     gmesh->BuildConnectivity();
 }
 
-int ComputeApproximation(TSimulationControl * sim_control)
+int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
 {
     
     std::string e_accuracy_type = "Hdiv";
     if(sim_control->m_Hdiv_plusplus_Q){
         e_accuracy_type = "Hdiv++";
     }
-    std::ofstream output("convergence_summary.txt",std::ios::app);
     output << std::endl;
     output << "Approximation space type : " << PyramidApproxSpaceType(sim_control) << std::endl;
     output << "Enhanced accuracy type : " << e_accuracy_type << std::endl;
@@ -673,8 +701,8 @@ int ComputeApproximation(TSimulationControl * sim_control)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 32;
-    const int n_threads_assembly = 32;
+    const int n_threads_error = 8;
+    const int n_threads_assembly = 8;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -690,7 +718,6 @@ int ComputeApproximation(TSimulationControl * sim_control)
         pyramid_ref_pattern = PyramidRef();
     }
 
-    REAL assemble_time, solving_time, error_time;
 
     TPZManVector<REAL,20> h_vec(n_h_levels+1,0.);
     TPZManVector<REAL,20> primal_error(n_h_levels+1,0.);
@@ -719,6 +746,12 @@ int ComputeApproximation(TSimulationControl * sim_control)
             /// Construction for Hdiv (velocity) approximation space
             meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
             
+#ifdef PZDEBUG
+            {
+                std::ofstream out("FluxCMesh.vtk");
+                TPZVTKGeoMesh::PrintCMeshVTK(meshvecOrig[0],out);
+            }
+#endif
             /// Construction for L2 (pressure) approximation space
             meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
             
@@ -748,15 +781,34 @@ int ComputeApproximation(TSimulationControl * sim_control)
 
             TPZCompMesh *cmeshMult = 0;
             TPZManVector<TPZCompMesh *,2> meshvec(2,0);
-            bool hybrid = false;
-            if(hybrid)
+            if(sim_control->m_hybrid)
             {
+                std::cout << "Creating the hybrid mesh\n";
                 TPZHybridizeHDiv hybrid;
                 std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
-                chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig);
+                bool groupelements = true;
+                chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig,groupelements);
                 TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
                 TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-                hybrid.GroupElements(cmeshMultHybrid);
+                delete cmeshMultOrig;
+                delete meshvecOrig[0];
+                int64_t nel = meshvecOrig[1]->NElements();
+                gmesh->ResetReference();
+                for (int64_t el=0; el<nel; el++) {
+                    TPZCompEl *cel = meshvecOrig[1]->Element(el);
+                    delete cel;
+                }
+                delete meshvecOrig[1];
+#ifdef LOG4CXX
+                if (logger->isDebugEnabled())
+                {
+//                    std::stringstream sout;
+                    std::ofstream sout("atomichybrid.txt");
+                    meshvecHybrid[0]->Print(sout);
+                    meshvecHybrid[1]->Print(sout);
+//                    LOGPZ_DEBUG(logger, sout.str())
+                }
+#endif
                 cmeshMult = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
                 
@@ -766,8 +818,10 @@ int ComputeApproximation(TSimulationControl * sim_control)
             else
             {
             
+                GroupPyramidElements(cmeshMultOrig);
                 TPZCompMeshTools::GroupElements(cmeshMultOrig);
                 std::cout << "Created grouped elements\n";
+                cmeshMultOrig->ComputeNodElCon();
                 TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
                 std::cout << "Created condensed elements\n";
                 cmeshMultOrig->CleanUpUnconnectedNodes();
@@ -776,7 +830,79 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 cmeshMult = cmeshMultOrig;
                 meshvec = meshvecOrig;
             }
-#ifdef LOG4CXX
+            
+#ifdef PZDEBUG
+            {
+                std::cout << "Verifying approximation space consistency\n";
+                /// verify if the approximation space for the flux is compatible with the approximation space of the pressure
+                VerifyApproximationSpaceConsistency(meshvec);
+            }
+#endif
+
+            cmeshMult->CleanUpUnconnectedNodes();
+
+                        // Getting dof information before unwrap the mesh
+            int ndof = meshvec[0]->Solution().Rows()+ meshvec[1]->Solution().Rows();
+            int ndof_cond = cmeshMult->NEquations();
+            TPZManVector<REAL,3> errors(3,0.);
+            REAL assemble_time(0.), solving_time(0.), error_time(0.);
+            
+
+            if(sim_control->m_dry_run == false)
+            {
+                // ------------------ Creating Analysis object -------------------
+                TPZAnalysis an(cmeshMult,should_renumber_Q);
+                TPZStepSolver<STATE> step;
+                step.SetDirect(ELDLt);
+                
+                if (use_pardiso_Q) {
+                    TPZSymetricSpStructMatrix sparse(cmeshMult);
+                    sparse.SetNumThreads(n_threads_assembly);
+                    an.SetStructuralMatrix(sparse);
+                    an.SetSolver(step);
+                }else{
+                    TPZSkylineStructMatrix skyl(cmeshMult);
+                    skyl.SetNumThreads(n_threads_assembly);
+                    an.SetStructuralMatrix(skyl);
+                    an.SetSolver(step);
+                }
+                
+                std::cout << "Starting assemble..." << std::endl;
+                std::cout << "Nequations = " << cmeshMult->NEquations() << std::endl;
+    #ifdef USING_BOOST
+                boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
+    #endif
+                // ------------------ Assembling -------------------
+                an.Assemble();
+    #ifdef USING_BOOST
+                boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
+                assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
+                std::cout << "Total wall time of Assemble = " << assemble_time << " ms." << std::endl;
+    #endif
+                
+                TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
+                
+                std::cout << "Assembled!" << std::endl;
+            
+                std::cout << "Starting Solve..." << std::endl;
+    #ifdef USING_BOOST
+                boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
+    #endif
+                an.Solve();
+                
+    #ifdef USING_BOOST
+                boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
+                solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
+                std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
+    #endif
+                
+                UnwrapMesh(cmeshMult);
+                an.LoadSolution();
+                cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+                TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
+                std::cout << "Solved!" << std::endl;
+               
+#ifdef LOG4CXX2
             if (logger->isDebugEnabled())
             {
                 std::stringstream sout;
@@ -784,103 +910,51 @@ int ComputeApproximation(TSimulationControl * sim_control)
                 LOGPZ_DEBUG(logger, sout.str())
             }
 #endif
-            cmeshMult->CleanUpUnconnectedNodes();
 
-            
-            // ------------------ Creating Analysis object -------------------
-            TPZAnalysis an(cmeshMult,should_renumber_Q);
-            TPZStepSolver<STATE> step;
-            step.SetDirect(ELDLt);
-            
-            if (use_pardiso_Q) {
-                TPZSymetricSpStructMatrix sparse(cmeshMult);
-                sparse.SetNumThreads(n_threads_assembly);
-                an.SetStructuralMatrix(sparse);
-                an.SetSolver(step);
-            }else{
-                TPZSkylineStructMatrix skyl(cmeshMult);
-                skyl.SetNumThreads(n_threads_assembly);
-                an.SetStructuralMatrix(skyl);
-                an.SetSolver(step);
-            }
-            
-            std::cout << "Starting assemble..." << std::endl;
-            std::cout << "Nequations = " << cmeshMult->NEquations() << std::endl;
-#ifdef USING_BOOST
-            boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
+#ifdef PZDEBUG
+                {
+                    std::cout << "Verifying solution consistency\n";
+                    TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
+                }
 #endif
-            // ------------------ Assembling -------------------
-            an.Assemble();
-#ifdef USING_BOOST
-            boost::posix_time::ptime tass2 = boost::posix_time::microsec_clock::local_time();
-            assemble_time = boost::numeric_cast<REAL>((tass2 - tass1).total_milliseconds());
-            std::cout << "Total wall time of Assemble = " << assemble_time << " ms." << std::endl;
-#endif
-            
-            TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
-            
-            std::cout << "Assembled!" << std::endl;
-        
-            std::cout << "Starting Solve..." << std::endl;
-#ifdef USING_BOOST
-            boost::posix_time::ptime tsolve1 = boost::posix_time::microsec_clock::local_time();
-#endif
-            an.Solve();
-            
-#ifdef USING_BOOST
-            boost::posix_time::ptime tsolve2 = boost::posix_time::microsec_clock::local_time();
-            solving_time = boost::numeric_cast<REAL>((tsolve2 - tsolve1).total_milliseconds());
-            std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
-#endif
-            // Getting dof information before unwrap the mesh
-            int ndof = meshvecOrig[0]->Solution().Rows()+ meshvecOrig[1]->Solution().Rows();
-            int ndof_cond = cmeshMult->NEquations();
-            
-            UnwrapMesh(cmeshMult);
-            an.LoadSolution();
-            cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
-            TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
-            std::cout << "Solved!" << std::endl;
-            
-            // ------------------ Post Processing VTK -------------------
-            if (sim_control->m_draw_vtk_Q) {
+                // ------------------ Post Processing VTK -------------------
+                if (sim_control->m_draw_vtk_Q) {
+                    
+                    std::cout << "Starting Post-processing..." << std::endl;
+                    TPZStack<std::string> scalnames, vecnames;
+                    scalnames.Push("p");
+                    scalnames.Push("div_q");
+                    vecnames.Push("q");
+                    std::string plotfile = "Approximated_Solution.vtk";
+                    an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+                    
+                    int postprocessresolution = 0;
+                    an.PostProcess(postprocessresolution);
+                    
+                }
+                std::cout << "Calculating error..." << std::endl;
                 
-                std::cout << "Starting Post-processing..." << std::endl;
-                TPZStack<std::string> scalnames, vecnames;
-                scalnames.Push("p");
-                scalnames.Push("div_q");
-                vecnames.Push("q");
-                std::string plotfile = "Approximated_Solution.vtk";
-                an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
+                an.SetExact(Analytic);
+                an.SetThreadsForError(n_threads_error);
+    #ifdef USING_BOOST
+                boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
+    #endif
+                an.PostProcessError(errors,false);
+    #ifdef USING_BOOST
+                boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
+    #endif
                 
-                int postprocessresolution = 0;
-                an.PostProcess(postprocessresolution);
+    #ifdef USING_BOOST
+                error_time = boost::numeric_cast<REAL>((terr2 - terr1).total_milliseconds());
+                std::cout << "Computed errors " << errors << std::endl;
+                std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " ms." << std::endl;
+    #endif
                 
-            }
-            std::cout << "Calculating error..." << std::endl;
-            
-            an.SetExact(Analytic);
-            TPZManVector<REAL,3> errors(3,1);
-            an.SetThreadsForError(n_threads_error);
-#ifdef USING_BOOST
-            boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
-#endif
-            an.PostProcessError(errors,false);
-#ifdef USING_BOOST
-            boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
-#endif
-            
-#ifdef USING_BOOST
-            error_time = boost::numeric_cast<REAL>((terr2 - terr1).total_milliseconds());
-            std::cout << "Computed errors " << errors << std::endl;
-            std::cout << "Total wall time of PostProcessError = " << terr2 - terr1 << " ms." << std::endl;
-#endif
-            
-#ifdef USING_BOOST
-            boost::posix_time::ptime tsim2 = boost::posix_time::microsec_clock::local_time();
-            std::cout << "Total wall time of simulation = " << tsim2 - tsim1 << " s" << std::endl;
-#endif
-            
+    #ifdef USING_BOOST
+                boost::posix_time::ptime tsim2 = boost::posix_time::microsec_clock::local_time();
+                std::cout << "Total wall time of simulation = " << tsim2 - tsim1 << " s" << std::endl;
+    #endif
+            }            
             int h_level = i;
             REAL p_error = errors[0]; // primal
             REAL d_error = errors[1]; // dual
@@ -916,22 +990,24 @@ int ComputeApproximation(TSimulationControl * sim_control)
             
         }// n_h_levels
         
-        // Computing approximation rates
-        TPZVec<REAL> p_conv(n_h_levels), d_conv(n_h_levels), h_conv(n_h_levels);
-        ComputeConvergenceRates(primal_error, h_vec, p_conv);
-        ComputeConvergenceRates(dual_error, h_vec, d_conv);
-        ComputeConvergenceRates(div_error, h_vec, h_conv);
-        
-        // print convergence summary
-        output << std::endl;
-        output << " Convergence rates summary " << std::endl;
-        output << " Polynomial order  =  " << p << std::endl;
-        output << " Primal convergence rates = " << setw(5) << p_conv << std::endl;
-        output << " Dual convergence rates = " << setw(5) << d_conv << std::endl;
-        output << " Divergence convergence rates = " << setw(5) << h_conv << std::endl;
-        output << std::endl;
-        output.flush();
-        
+        if(sim_control->m_dry_run == false)
+        {
+            // Computing approximation rates
+            TPZVec<REAL> p_conv(n_h_levels), d_conv(n_h_levels), h_conv(n_h_levels);
+            ComputeConvergenceRates(primal_error, h_vec, p_conv);
+            ComputeConvergenceRates(dual_error, h_vec, d_conv);
+            ComputeConvergenceRates(div_error, h_vec, h_conv);
+            
+            // print convergence summary
+            output << std::endl;
+            output << " Convergence rates summary " << std::endl;
+            output << " Polynomial order  =  " << p << std::endl;
+            output << " Primal convergence rates = " << setw(5) << p_conv << std::endl;
+            output << " Dual convergence rates = " << setw(5) << d_conv << std::endl;
+            output << " Divergence convergence rates = " << setw(5) << h_conv << std::endl;
+            output << std::endl;
+            output.flush();
+        }        
     }// n_p_levels
     
     output << std::endl;
@@ -2229,6 +2305,7 @@ TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * contro
     const int matid = 1;
     const int dim = 3;
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+    cmesh->SetName("PressureMesh");
     cmesh->SetDimModel(dim);
     if (control->m_Hdiv_plusplus_Q) {
         p = p+1;
@@ -2259,6 +2336,7 @@ TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, i
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
     cmesh->SetDimModel(dim);
     cmesh->SetDefaultOrder(p);
+    cmesh->SetName("FluxMesh");
     
     TPZVecL2 *mymat = new TPZVecL2(matid);
     mymat->SetDimension(dim);
@@ -3674,6 +3752,8 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl 
     
     meshvec[0]->Reference()->ResetReference();
     meshvec[0]->LoadReferences();
+    TPZGeoMesh *gmesh = meshvec[0]->Reference();
+    TPZVec<int64_t> affected_elements(gmesh->NElements(),0);
     int64_t nel = meshvec[0]->NElements();
     for (int64_t el=0; el<nel; el++) {
         TPZCompEl *cel = meshvec[0]->Element(el);
@@ -3688,15 +3768,24 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl 
         if (gel->Father()->Type() != EPiramide) {
             continue;
         }
+        
+        if (gel->Father()->NSubElements() > 4)
+        {
+            continue;
+        }
         TPZConnect &c = cel->Connect(0);
         bool hasdependency = c.HasDependency();
 
         TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(cel);
-        intel->PRefine(2*pFlux+n_accuracy);
-        TPZCompElSide large;
-        
+        // if the connect is dependent, increase its order and recompute the dependency
         if(hasdependency)
         {
+            int nc = intel->NConnects();
+            intel->SetSideOrder(gel->NSides()-1,2*pFlux+n_accuracy);
+//            intel->PRefine(2*pFlux+n_accuracy);
+            int64_t gelindex = intel->Reference()->Index();
+            affected_elements[gelindex] = 1;
+            TPZCompElSide large;        
             TPZGeoElSide gelside(gel,10);
             large = gelside.LowerLevelCompElementList2(1);
             if (!large) {
@@ -3708,15 +3797,12 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl 
             {
                 DebugStop();
             }
-        }
-        int nshape = intel->NConnectShapeF(0, 2*pFlux);
-        int64_t cindex = cel->ConnectIndex(0);
-        c.SetOrder(2*pFlux, cindex);
-        c.SetNShape(nshape);
-        int64_t seqnum = c.SequenceNumber();
-        meshvec[0]->Block().Set(seqnum, nshape);
-        if(hasdependency)
-        {
+            int nshape = intel->NConnectShapeF(0, 2*pFlux);
+            int64_t cindex = cel->ConnectIndex(0);
+            c.SetOrder(2*pFlux, cindex);
+            c.SetNShape(nshape);
+            int64_t seqnum = c.SequenceNumber();
+            meshvec[0]->Block().Set(seqnum, nshape);
             TPZInterpolatedElement *largeintel = dynamic_cast<TPZInterpolatedElement *>(large.Element());
             intel->RestrainSide(10, largeintel, large.Side());
         }
@@ -3725,6 +3811,7 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl 
     meshvec[0]->ExpandSolution();
     meshvec[1]->Reference()->ResetReference();
     nel = meshvec[1]->NElements();
+    // increase the order of the pressure elements as well
     for (int64_t el=0; el<nel; el++) {
         TPZCompEl *cel = meshvec[1]->Element(el);
         if (!cel) {
@@ -3738,9 +3825,10 @@ void IncreasePyramidSonOrder(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl 
         if (gel->Father()->Type() != EPiramide) {
             continue;
         }
+        if(affected_elements[gel->Index()] == 0) continue;
         
-        TPZInterpolatedElement *intel = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
-        intel->PRefine(2*pFlux+n_accuracy);
+        TPZInterpolatedElement *intelpressure = dynamic_cast<TPZInterpolatedElement *>(meshvec[1]->Element(el));
+        intelpressure->PRefine(2*pFlux+n_accuracy);
     }
     meshvec[1]->ExpandSolution();
 }
@@ -3941,3 +4029,122 @@ void UnwrapMesh(TPZCompMesh *cmesh)
         }
     }
 }
+
+void GroupPyramidElements(TPZCompMesh *cmesh)
+{
+    cmesh->Reference()->ResetReference();
+    cmesh->LoadReferences();
+    int dim = cmesh->Dimension();
+    int64_t nel = cmesh->NElements();
+    // all elements that have been put in a group
+    std::set<int64_t> grouped;
+    for (int64_t el=0; el<nel; el++) {
+        if (grouped.find(el) != grouped.end()) {
+            continue;
+        }
+        TPZCompEl *cel = cmesh->Element(el);
+        if (!cel) {
+            continue;
+        }
+        TPZGeoEl *gelseed = cel->Reference();
+        if (!gelseed || gelseed->Dimension() != dim) {
+            continue;
+        }
+        TPZGeoEl *father = gelseed->Father();
+        if(!father || father->Type() != EPiramide)
+        {
+            continue;
+        }
+        std::set<int64_t> connectlist;
+        int nsub = father->NSubElements();
+        if(nsub != 2 and nsub != 4) 
+        {
+            // the pyramid element was neither split in two or four
+            continue;
+        }
+        for(int sub=0; sub<nsub; sub++)
+        {
+            TPZGeoEl *subel = father->SubElement(sub);
+            TPZCompEl *cel = subel->Reference();
+            cel->BuildConnectList(connectlist);
+        }
+        std::set<int64_t> elgroup;
+        for(int sub=0; sub<nsub; sub++)
+        {
+            TPZGeoEl *gel = father->SubElement(sub);
+            elgroup.insert(gel->Reference()->Index());
+            int ns = gel->NSides();
+            for (int is=0; is<ns; is++) {
+                TPZGeoElSide gelside(gel,is);
+                TPZStack<TPZCompElSide> celstack;
+                gelside.ConnectedCompElementList(celstack, 0, 0);
+                int64_t nelstack = celstack.size();
+                for (int64_t elst=0; elst<nelstack; elst++) {
+                    TPZCompElSide celst=celstack[elst];
+                    TPZCompEl *celsidelement = celst.Element();
+                    if (grouped.find(celsidelement->Index()) != grouped.end()) {
+                        continue;
+                    }
+                    std::set<int64_t> smallset;
+                    celsidelement->BuildConnectList(smallset);
+                    if (std::includes(connectlist.begin(), connectlist.end(), smallset.begin(), smallset.end()))
+                    {
+                        elgroup.insert(celsidelement->Index());
+                    }
+                }
+            }
+        }
+        if (elgroup.size()) {
+            elgroup.insert(el);
+            int64_t grindex;
+            TPZElementGroup *elgr = new TPZElementGroup(*cmesh,grindex);
+            for (std::set<int64_t>::iterator it = elgroup.begin(); it != elgroup.end(); it++) {
+                elgr->AddElement(cmesh->Element(*it));
+                grouped.insert(*it);
+            }
+            grouped.insert(grindex);
+        }
+    }
+    cmesh->ComputeNodElCon();
+}
+
+/// verify if the approximation space for the flux is compatible with the approximation space of the pressure
+void VerifyApproximationSpaceConsistency(TPZVec<TPZCompMesh *> &meshvec)
+{
+    TPZGeoMesh *gmesh = meshvec[0]->Reference();
+    gmesh->ResetReference();
+    meshvec[1]->LoadReferences();
+    int meshdim = meshvec[0]->Dimension();
+    int64_t nel = meshvec[0]->NElements();
+    for(int64_t el = 0; el<nel; el++)
+    {
+        TPZCompEl *celflux = meshvec[0]->Element(el);
+        TPZInterpolatedElement *intelflux = dynamic_cast<TPZInterpolatedElement *>(celflux);
+        if(!intelflux) continue;
+        TPZGeoEl *gel = intelflux->Reference();
+        if(gel->Dimension() != meshdim) continue;
+        TPZCompEl *celpressure = gel->Reference();
+        TPZInterpolatedElement *intelpressure = dynamic_cast<TPZInterpolatedElement *>(celpressure);
+        int ncon_flux = intelflux->NConnects();
+        int ncon_pressure = intelpressure->NConnects();
+        int internal_flux_order = intelflux->Connect(ncon_flux-1).Order();
+        for(int ic=0; ic<ncon_flux; ic++)
+        {
+            int con_order = intelflux->Connect(ic).Order();
+            if(con_order > internal_flux_order)
+            {
+                DebugStop();
+            }
+        }
+        for(int ic=gel->NCornerNodes(); ic<ncon_pressure; ic++)
+        {
+            int con_order = intelpressure->Connect(ic).Order();
+            if(con_order != internal_flux_order)
+            {
+                DebugStop();
+            }
+        }
+    }
+}
+
+
