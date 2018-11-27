@@ -429,7 +429,8 @@ int main(int argc, char *argv[])
 //    return 0;
     
     TSimulationControl * sim_control = NULL;
-    if(argc != 9){
+    if(argc != 11){
+        std::cout << "Running with default arguments argc = " << argc << "\n";
         sim_control = new TSimulationControl;
         sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
         sim_control->m_geometry_type = EAcademic;
@@ -441,14 +442,17 @@ int main(int argc, char *argv[])
         sim_control->m_geometry_type = EVerticalWellHe;
         sim_control->m_geometry_type = EVerticalWellTe;
         sim_control->m_red_black_stride_Q = true;
-        sim_control->m_h_levels = 1;
-        sim_control->m_p_levels = 1;
+        sim_control->m_h_level_min = 0;
+        sim_control->m_p_level_min = 1;
+        sim_control->m_h_level_max = 1;
+        sim_control->m_p_level_max = 1;
         sim_control->m_Hdiv_plusplus_Q = false;
         sim_control->m_hybrid = true;
         sim_control->m_dry_run = false;
     }
     else
     {
+        std::cout << "Running with command line arguments\n";
         sim_control = new TSimulationControl(argv);
     }
     gCurrentRun = sim_control->m_geometry_type;
@@ -694,8 +698,10 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
 #endif
 
     EApproxSpace run_type = sim_control->m_run_type;
-    int n_p_levels = sim_control->m_p_levels;
-    int n_h_levels  = sim_control->m_h_levels;
+    int n_p_level_min = sim_control->m_p_level_min;
+    int n_p_level_max = sim_control->m_p_level_max;
+    int n_h_level_min  = sim_control->m_h_level_min;
+    int n_h_level_max  = sim_control->m_h_level_max;
     const int dim = 3;
     
     /// Hard code controls
@@ -719,18 +725,18 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     }
 
 
-    TPZManVector<REAL,20> h_vec(n_h_levels+1,0.);
-    TPZManVector<REAL,20> primal_error(n_h_levels+1,0.);
-    TPZManVector<REAL,20> dual_error(n_h_levels+1,0.);
-    TPZManVector<REAL,20> div_error(n_h_levels+1,0.);
+    TPZManVector<REAL,20> h_vec(n_h_level_max-n_h_level_min+1,0.);
+    TPZManVector<REAL,20> primal_error(n_h_level_max-n_h_level_min+1,0.);
+    TPZManVector<REAL,20> dual_error(n_h_level_max-n_h_level_min+1,0.);
+    TPZManVector<REAL,20> div_error(n_h_level_max-n_h_level_min+1,0.);
     
-    for (int p = 1; p <= n_p_levels; p++) {
+    for (int p = n_p_level_min; p <= n_p_level_max; p++) {
         
         output << std::endl;
         output << " Polynomial order  =  " << p << std::endl;
         output << setw(5) <<  " h_level " << setw(10) << " n_elements" << setw(10) << " h" << setw(15) << " ndof" << setw(15) << " ndof_cond" << setw(25) << " assemble_time (msec)" << setw(25) << " solving_time (msec)" << setw(25) << " error_time (msec)" << setw(25) << " Primal l2 error" << setw(25) << " Dual l2 error"  << setw(25) << " Div l2 error" << endl;
     
-        for (int i = 0 ; i <= n_h_levels; i++){
+        for (int i = n_h_level_min ; i <= n_h_level_max; i++){
             
 #ifdef USING_BOOST
             boost::posix_time::ptime tsim1 = boost::posix_time::microsec_clock::local_time();
@@ -962,10 +968,10 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             output << setw(5) <<  h_level << setw(10) << n_elements << setw(15) << h << setw(15) << ndof << setw(15) << ndof_cond << setw(25) << assemble_time << setw(25) << solving_time << setw(25) << error_time << setw(25) << p_error << setw(25) << d_error  << setw(25) << h_error << endl;
             
             // Storage data for h convergence rates
-            primal_error[i] = p_error;
-            dual_error[i] = d_error;
-            div_error[i] = h_error;
-            h_vec[i] = h;
+            primal_error[i-n_h_level_min] = p_error;
+            dual_error[i-n_h_level_min] = d_error;
+            div_error[i-n_h_level_min] = h_error;
+            h_vec[i-n_h_level_min] = h;
             
 #ifdef USING_BOOST
             boost::posix_time::ptime deletion_t1 = boost::posix_time::microsec_clock::local_time();
@@ -993,7 +999,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
         if(sim_control->m_dry_run == false)
         {
             // Computing approximation rates
-            TPZVec<REAL> p_conv(n_h_levels), d_conv(n_h_levels), h_conv(n_h_levels);
+            TPZVec<REAL> p_conv(n_h_level_max-n_h_level_min,0.), d_conv(n_h_level_max-n_h_level_min,0), h_conv(n_h_level_max-n_h_level_min,0);
             ComputeConvergenceRates(primal_error, h_vec, p_conv);
             ComputeConvergenceRates(dual_error, h_vec, d_conv);
             ComputeConvergenceRates(div_error, h_vec, h_conv);
@@ -3935,7 +3941,7 @@ void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> 
                                              TPZVec<REAL> &semih1ErrVec, TSimulationControl * control)
 {
     // ---------------- Defining filename ---------------
-    int p_order = control->m_p_levels;
+    int p_order = control->m_p_level_max-control->m_p_level_min+1;
     bool hdiv_plus_plus_Q = control->m_Hdiv_plusplus_Q;
     EApproxSpace run_type = control->m_run_type;
     std::string mathematicaFilename = "NoName.nb";
@@ -3946,7 +3952,7 @@ void GenerateMathematicaWithConvergenceRates(TPZVec<REAL> &neqVec, TPZVec<REAL> 
     if(run_type == EDividedPyramidIncreasedOrder){Mathsout << "convergenceRatesDivPyrIncOrdMesh";}
     if(run_type == EDividedPyramid4){Mathsout << "convergenceRatesDividedPyr4Mesh";}
     if(run_type == EDividedPyramidIncreasedOrder4){Mathsout << "convergenceRatesDivPyr4IncOrdMesh";}
-    Mathsout << control->m_p_levels;
+    Mathsout << control->m_p_level_max-control->m_p_level_min+1;
     if (control->m_Hdiv_plusplus_Q) {
         Mathsout << "plusplus";
     }

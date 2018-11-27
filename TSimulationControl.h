@@ -34,14 +34,17 @@ public:
     /// Type of geometry description
     EGeometryType m_geometry_type = EAcademic;
     
+    int m_h_level_min = 0;
     /// Number of h refinements for H convergence
-    int m_h_levels = 3;
+    int m_h_level_max = 0;
     
     /// Directive to create a red black mixed mesh (red pyramids, black hexahedra)
     bool m_red_black_stride_Q = true;
     
     /// Maximum valure of polynomial approximation order
-    int m_p_levels = 1;
+    int m_p_level_min = 1;
+    
+    int m_p_level_max = 1;
     
     /// Directive for the use of augmented pressure accuracy
     bool m_Hdiv_plusplus_Q = false;
