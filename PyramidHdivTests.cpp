@@ -402,6 +402,8 @@ int integer_power(int base, unsigned int exp){
     
 }
 
+#define H1_Q
+
 void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements);
 
 void CreateFlattenGeometry(TPZGeoMesh & gmesh);
@@ -749,6 +751,8 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             
             TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
             
+//#ifndef H1_Q
+            
             /// Construction for Hdiv (velocity) approximation space
             meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
             
@@ -785,7 +789,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             // ------------------ Create CMesh multiphysics -------------------
             TPZCompMesh *cmeshMultOrig = CreateCmeshMulti(meshvecOrig,sim_control);
 
-            TPZCompMesh *cmeshMult = 0;
+            TPZCompMesh *cmesh = 0;
             TPZManVector<TPZCompMesh *,2> meshvec(2,0);
             if(sim_control->m_hybrid)
             {
@@ -815,7 +819,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
 //                    LOGPZ_DEBUG(logger, sout.str())
                 }
 #endif
-                cmeshMult = cmeshMultHybrid;
+                cmesh = cmeshMultHybrid;
                 meshvec = meshvecHybrid;
                 
 //                CheckNormalContinuity(meshvec[0]);
@@ -833,7 +837,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 cmeshMultOrig->CleanUpUnconnectedNodes();
                 cmeshMultOrig->ExpandSolution();
                 
-                cmeshMult = cmeshMultOrig;
+                cmesh = cmeshMultOrig;
                 meshvec = meshvecOrig;
             }
             
@@ -845,11 +849,11 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             }
 #endif
 
-            cmeshMult->CleanUpUnconnectedNodes();
+            cmesh->CleanUpUnconnectedNodes();
 
                         // Getting dof information before unwrap the mesh
             int ndof = meshvec[0]->Solution().Rows()+ meshvec[1]->Solution().Rows();
-            int ndof_cond = cmeshMult->NEquations();
+            int ndof_cond = cmesh->NEquations();
             TPZManVector<REAL,3> errors(3,0.);
             REAL assemble_time(0.), solving_time(0.), error_time(0.);
             
@@ -857,24 +861,24 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             if(sim_control->m_dry_run == false)
             {
                 // ------------------ Creating Analysis object -------------------
-                TPZAnalysis an(cmeshMult,should_renumber_Q);
+                TPZAnalysis an(cmesh,should_renumber_Q);
                 TPZStepSolver<STATE> step;
                 step.SetDirect(ELDLt);
                 
                 if (use_pardiso_Q) {
-                    TPZSymetricSpStructMatrix sparse(cmeshMult);
+                    TPZSymetricSpStructMatrix sparse(cmesh);
                     sparse.SetNumThreads(n_threads_assembly);
                     an.SetStructuralMatrix(sparse);
                     an.SetSolver(step);
                 }else{
-                    TPZSkylineStructMatrix skyl(cmeshMult);
+                    TPZSkylineStructMatrix skyl(cmesh);
                     skyl.SetNumThreads(n_threads_assembly);
                     an.SetStructuralMatrix(skyl);
                     an.SetSolver(step);
                 }
                 
                 std::cout << "Starting assemble..." << std::endl;
-                std::cout << "Nequations = " << cmeshMult->NEquations() << std::endl;
+                std::cout << "Nequations = " << cmesh->NEquations() << std::endl;
     #ifdef USING_BOOST
                 boost::posix_time::ptime tass1 = boost::posix_time::microsec_clock::local_time();
     #endif
@@ -902,10 +906,10 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 std::cout << "Total wall time of Solve = " << solving_time << " ms." << std::endl;
     #endif
                 
-                UnwrapMesh(cmeshMult);
+                UnwrapMesh(cmesh);
                 an.LoadSolution();
-                cmeshMult->Solution() *= -1.0; // Because the material contributions are expressed in residual form
-                TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmeshMult);
+                cmesh->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+                TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmesh);
                 std::cout << "Solved!" << std::endl;
                
 #ifdef LOG4CXX2
