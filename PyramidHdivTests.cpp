@@ -981,7 +981,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             boost::posix_time::ptime deletion_t1 = boost::posix_time::microsec_clock::local_time();
 #endif
             
-            delete cmeshMult;
+            delete cmesh;
             delete meshvec[0];
             int64_t nel = meshvec[1]->NElements();
             gmesh->ResetReference();
