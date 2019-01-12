@@ -98,6 +98,7 @@ TPZGeoMesh * CreateGeoMeshPrism();
 TPZCompMesh * CreateCmeshPressure(TPZGeoMesh *gmesh, TSimulationControl * control, int p);
 TPZCompMesh * CreateCmeshFlux(TPZGeoMesh *gmesh, TSimulationControl * control, int p);
 TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationControl * control);
+TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int p_order);
 void LoadSolution(TPZCompMesh *cpressure);
 void ProjectFlux(TPZCompMesh *cfluxmesh);
 void GroupElements(TPZCompMesh *cmesh);
@@ -436,13 +437,13 @@ int main(int argc, char *argv[])
         sim_control = new TSimulationControl;
         sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
         sim_control->m_geometry_type = EAcademic;
-        sim_control->m_geometry_type = EVerticalWellHePyTe;
-        sim_control->m_geometry_type = ESphericalBarrierHePyTe;
-        sim_control->m_geometry_type = ESphericalBarrierHe;
-        sim_control->m_geometry_type = ESphericalBarrierTe;
-        sim_control->m_geometry_type = EVerticalWellHePyTe;
-        sim_control->m_geometry_type = EVerticalWellHe;
-        sim_control->m_geometry_type = EVerticalWellTe;
+//        sim_control->m_geometry_type = EVerticalWellHePyTe;
+//        sim_control->m_geometry_type = ESphericalBarrierHePyTe;
+//        sim_control->m_geometry_type = ESphericalBarrierHe;
+//        sim_control->m_geometry_type = ESphericalBarrierTe;
+//        sim_control->m_geometry_type = EVerticalWellHePyTe;
+//        sim_control->m_geometry_type = EVerticalWellHe;
+//        sim_control->m_geometry_type = EVerticalWellTe;
         sim_control->m_red_black_stride_Q = true;
         sim_control->m_h_level_min = 0;
         sim_control->m_p_level_min = 1;
@@ -451,6 +452,7 @@ int main(int argc, char *argv[])
         sim_control->m_Hdiv_plusplus_Q = false;
         sim_control->m_hybrid = true;
         sim_control->m_dry_run = false;
+        sim_control->m_draw_vtk_Q = true;
     }
     else
     {
@@ -751,7 +753,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             
             TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
             
-//#ifndef H1_Q
+#ifndef H1_Q
             
             /// Construction for Hdiv (velocity) approximation space
             meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
@@ -848,16 +850,32 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 VerifyApproximationSpaceConsistency(meshvec);
             }
 #endif
-
+            
             cmesh->CleanUpUnconnectedNodes();
-
-                        // Getting dof information before unwrap the mesh
+            // Getting dof information before unwrap the mesh
             int ndof = meshvec[0]->Solution().Rows()+ meshvec[1]->Solution().Rows();
             int ndof_cond = cmesh->NEquations();
+
+#else
+            TPZCompMesh * cmesh = CreateCGCmesh(gmesh, sim_control, p);
+            
+            { // Static condensation for CG approximation
+                TPZCompMeshTools::GroupElements(cmesh);
+                std::cout << "Created grouped elements\n";
+                cmesh->ComputeNodElCon();
+                TPZCompMeshTools::CreatedCondensedElements(cmesh, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                std::cout << "Created condensed elements\n";
+                cmesh->CleanUpUnconnectedNodes();
+                cmesh->ExpandSolution();
+            }
+            
+            int ndof = cmesh->Solution().Rows();
+            int ndof_cond = cmesh->NEquations();
+#endif
+
             TPZManVector<REAL,3> errors(3,0.);
             REAL assemble_time(0.), solving_time(0.), error_time(0.);
             
-
             if(sim_control->m_dry_run == false)
             {
                 // ------------------ Creating Analysis object -------------------
@@ -909,7 +927,9 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 UnwrapMesh(cmesh);
                 an.LoadSolution();
                 cmesh->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+#ifndef H1_Q
                 TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmesh);
+#endif
                 std::cout << "Solved!" << std::endl;
                
 #ifdef LOG4CXX2
@@ -921,11 +941,13 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             }
 #endif
 
-#ifdef PZDEBUG
-                {
-                    std::cout << "Verifying solution consistency\n";
-                    TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
-                }
+#ifndef H1_Q
+    #ifdef PZDEBUG
+                    {
+                        std::cout << "Verifying solution consistency\n";
+                        TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
+                    }
+    #endif
 #endif
                 // ------------------ Post Processing VTK -------------------
                 if (sim_control->m_draw_vtk_Q) {
@@ -933,7 +955,9 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                     std::cout << "Starting Post-processing..." << std::endl;
                     TPZStack<std::string> scalnames, vecnames;
                     scalnames.Push("p");
+#ifndef H1_Q
                     scalnames.Push("div_q");
+#endif
                     vecnames.Push("q");
                     std::string plotfile = "Approximated_Solution.vtk";
                     an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
@@ -980,8 +1004,8 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
 #ifdef USING_BOOST
             boost::posix_time::ptime deletion_t1 = boost::posix_time::microsec_clock::local_time();
 #endif
-            
             delete cmesh;
+#ifndef H1_Q
             delete meshvec[0];
             int64_t nel = meshvec[1]->NElements();
             gmesh->ResetReference();
@@ -990,6 +1014,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 delete cel;
             }
             delete meshvec[1];
+#endif
             delete gmesh;
             
 #ifdef USING_BOOST
@@ -2720,6 +2745,105 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
 #endif
     
     return mphysics;
+}
+
+TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int p_order)
+{
+    const int int_p_order = 10;
+    int dim = gmesh->Dimension();
+    TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
+    
+    switch (control->m_geometry_type) {
+        case EAcademic:
+        {
+            const int matid = 1, bc0 = -1;
+            const int matbcfake = 3;
+            const int dirichlet = 0;
+            TPZPrimalPoisson * mat = new TPZPrimalPoisson(matid);
+            {
+                TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing,int_p_order);
+                force->SetPolynomialOrder(gIntegrationOrder);
+                TPZAutoPointer<TPZFunction<STATE> > bodyforce = force;
+                
+                mat->SetForcingFunction(bodyforce);
+            }
+            {
+                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
+                analytic_f->SetPolynomialOrder(gIntegrationOrder);
+                TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
+                mat->SetForcingFunctionExact(analytic);
+            }
+            //inserindo o material na malha computacional
+            cmesh->InsertMaterialObject(mat);
+            
+            //Criando condicoes de contorno
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * BCond0 = NULL;
+            BCond0 = mat->CreateBC(mat, bc0,dirichlet, val1, val2);
+            {
+                TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+                boundforce->SetPolynomialOrder(gIntegrationOrder);
+                TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+                BCond0->SetForcingFunction(0,force);
+            }
+            cmesh->InsertMaterialObject(BCond0);
+            
+            // a zero contribution element ?????
+            BCond0 = mat->CreateBC(mat, matbcfake,dirichlet, val1, val2);
+            cmesh->InsertMaterialObject(BCond0);
+            
+        }
+            break;
+        case EVerticalWellHe:
+        {
+            const int matid = 1;
+            TPZPrimalPoisson * mat = new TPZPrimalPoisson(matid);
+            cmesh->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_inner);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
+            bc_impervious->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        default:{
+            DebugStop();
+        }
+            break;
+    }
+    
+    cmesh->SetDefaultOrder(p_order);
+    cmesh->SetDimModel(dim);
+    cmesh->SetAllCreateFunctionsContinuous();
+    cmesh->AutoBuild();
+    
+    
+#ifdef LOG4CXX
+    if(logger->isDebugEnabled())
+    {
+        std::stringstream sout;
+        cmesh->Print(sout);
+        LOGPZ_DEBUG(logger,sout.str())
+    }
+#endif
+    
+    return cmesh;
 }
 
 // ------------------------ Para testes do assemble -----------------------------
