@@ -16,6 +16,7 @@
 #include <time.h>
 #include <sstream>
 #include <math.h>
+#include <algorithm>
 
 #include "tpzgeoelrefpattern.h"
 #include "pzgmesh.h"
@@ -55,6 +56,9 @@
 #include "TPZRefPattern.h"
 #include "tpzgeoelrefpattern.h"
 #include "TPZVTKGeoMesh.h"
+
+#include "pzsysmp.h"
+#include "pzskylmat.h"
 
 // Simulation Control
 #include "TSimulationControl.h"
@@ -403,7 +407,7 @@ int integer_power(int base, unsigned int exp){
     
 }
 
-#define H1_Q
+//#define H1_Q
 
 void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements);
 
@@ -435,7 +439,8 @@ int main(int argc, char *argv[])
     if(argc != 11){
         std::cout << "Running with default arguments argc = " << argc << "\n";
         sim_control = new TSimulationControl;
-        sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
+//        sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
+        sim_control->m_run_type = EPyramid;
         sim_control->m_geometry_type = EAcademic;
 //        sim_control->m_geometry_type = EVerticalWellHePyTe;
 //        sim_control->m_geometry_type = ESphericalBarrierHePyTe;
@@ -447,12 +452,12 @@ int main(int argc, char *argv[])
         sim_control->m_red_black_stride_Q = true;
         sim_control->m_h_level_min = 0;
         sim_control->m_p_level_min = 1;
-        sim_control->m_h_level_max = 1;
-        sim_control->m_p_level_max = 1;
+        sim_control->m_h_level_max = 3;
+        sim_control->m_p_level_max = 2;
         sim_control->m_Hdiv_plusplus_Q = false;
         sim_control->m_hybrid = true;
         sim_control->m_dry_run = false;
-        sim_control->m_draw_vtk_Q = true;
+        sim_control->m_draw_vtk_Q = false;
     }
     else
     {
@@ -463,6 +468,9 @@ int main(int argc, char *argv[])
     std::cout << "Simulation control object with parameters " << std::endl;
     sim_control->Print();
     std::ofstream output("convergence_summary.txt",std::ios::app);
+#ifdef H1_Q
+    output << "****** RUNNING H1 APPROXIMATION *********\n";
+#endif
     ComputeApproximation(sim_control, output);
     return 0;
 }
@@ -844,6 +852,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             }
             
 #ifdef PZDEBUG
+            if(0)
             {
                 std::cout << "Verifying approximation space consistency\n";
                 /// verify if the approximation space for the flux is compatible with the approximation space of the pressure
@@ -876,12 +885,21 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             TPZManVector<REAL,3> errors(3,0.);
             REAL assemble_time(0.), solving_time(0.), error_time(0.);
             
+            if(0)
+            {
+                int count = i;
+                std::stringstream filename;
+                filename << "CompMesh_" << count << ".txt";
+                std::ofstream out(filename.str());
+                cmesh->Print(out);
+            }
+
             if(sim_control->m_dry_run == false)
             {
                 // ------------------ Creating Analysis object -------------------
                 TPZAnalysis an(cmesh,should_renumber_Q);
                 TPZStepSolver<STATE> step;
-                step.SetDirect(ELDLt);
+                step.SetDirect(ECholesky);
                 
                 if (use_pardiso_Q) {
                     TPZSymetricSpStructMatrix sparse(cmesh);
@@ -909,8 +927,31 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     #endif
                 
                 TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
-                
-                std::cout << "Assembled!" << std::endl;
+#ifndef H1_Q
+                if (use_pardiso_Q) {
+                    TPZSYsmpMatrix<STATE> *matloc = dynamic_cast<TPZSYsmpMatrix<STATE> *>(mat.operator ->());
+                    TPZVec<STATE> &a = matloc->A();
+                    an.Rhs() *= -1.;
+                    for(auto &itr:a) itr *= -1.;
+                    std::cout << "a[0] " << a[0] << std::endl;
+                    if(0)
+                    {
+                        std::stringstream globname;
+                        globname << "globmatrix_" << i << ".txt";
+                        std::ofstream glob(globname.str());
+                        glob.precision(12);
+                        for(auto itr:a) glob << itr << std::endl;
+                    }
+                }
+                else
+                {
+                    TPZSkylMatrix<STATE> *skyl = dynamic_cast<TPZSkylMatrix<STATE> *>(mat.operator ->());
+                    (*skyl) *= -1.;
+                    an.Rhs() *= -1.;
+                    std::cout << "skyl(0,0) = " << skyl->Get(0,0) << std::endl;
+                }
+#endif
+                std::cout << "Assembled! first element : " << mat->Get(0,0) <<  std::endl;
             
                 std::cout << "Starting Solve..." << std::endl;
     #ifdef USING_BOOST
@@ -941,13 +982,24 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             }
 #endif
 
+            if(0)
+            {
+                std::stringstream rhsfile,solfile;
+                rhsfile << "rhs_" << i << ".txt";
+                solfile << "meshsol_" << i << ".txt";
+                std::ofstream out3(rhsfile.str());
+                an.Rhs().Print("rhs = ",out3,EMathematicaInput);
+                std::ofstream out2(solfile.str());
+                an.Mesh()->Solution().Print("meshsol = ",out2,EMathematicaInput);
+            }
+#ifdef PZDEBUG
 #ifndef H1_Q
-    #ifdef PZDEBUG
-                    {
-                        std::cout << "Verifying solution consistency\n";
-                        TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
-                    }
-    #endif
+                if(0)
+                {
+                    std::cout << "Verifying solution consistency\n";
+                    TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
+                }
+#endif
 #endif
                 // ------------------ Post Processing VTK -------------------
                 if (sim_control->m_draw_vtk_Q) {
@@ -973,7 +1025,18 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     #ifdef USING_BOOST
                 boost::posix_time::ptime terr1 = boost::posix_time::microsec_clock::local_time();
     #endif
-                an.PostProcessError(errors,false);
+                {
+                    int64_t nel = an.Mesh()->NElements();
+                    an.Mesh()->ElementSolution().Redim(nel,3);
+                }
+                an.PostProcessError(errors,true);
+                if(0)
+                {
+                    std::stringstream errorname;
+                    errorname << "elerror_" << i << ".txt";
+                    std::ofstream out1(errorname.str());
+                    an.Mesh()->ElementSolution().Print("Elerror = ",out1,EMathematicaInput);
+                }
     #ifdef USING_BOOST
                 boost::posix_time::ptime terr2 = boost::posix_time::microsec_clock::local_time();
     #endif
@@ -1076,6 +1139,11 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
         case EHexaHedra:
             type = "Conformal hexahedral mesh.";
             break;
+#ifdef H1_Q
+        case EPyramid:
+            type = "Pyramid mesh.";
+            break;
+#endif
         default:
             DebugStop();
             break;
@@ -1517,9 +1585,11 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
 
 #ifndef MultipleMeshes_Q
         
+        // WE ARE DIVIDING THE TETRAHEDRAL ELEMENTS UNIFORMLY, INCLUDING PYRAMIDS
         bool has_only_tetrahedra_Q =
-        sim_control->m_geometry_type == ESphericalBarrierTe ||
-        sim_control->m_geometry_type == EVerticalWellTe;
+        sim_control->m_geometry_type == ESphericalBarrierTe;
+        if(sim_control->m_geometry_type == EVerticalWellTe) has_pyramids_Q = true;
+//                || sim_control->m_geometry_type == EVerticalWellTe;
     
         if (has_only_tetrahedra_Q) {
             UniformRefineTetrahedrons(gmesh, h_ref_level);
@@ -1564,6 +1634,7 @@ TPZGeoMesh * GeometryConstruction(int h_ref_level, REAL & h_min, int & n_element
     
 #ifdef PZDEBUG
     // ------------------ Generating VTK with GMesh -------------------
+    if(0)
     {
         std::string geoMeshName = "geometry.vtk";
         std::ofstream outPara(geoMeshName);
