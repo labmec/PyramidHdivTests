@@ -407,7 +407,7 @@ int integer_power(int base, unsigned int exp){
     
 }
 
-//#define H1_Q
+
 
 void ComputeCharacteristicHElSize(TPZGeoMesh * geometry, REAL & h_min, int & n_elements);
 
@@ -418,6 +418,12 @@ void UniformRefineTetrahedrons(TPZGeoMesh * gmesh, int n_ref);
 void FlipPyramids(TPZGeoMesh * gmesh);
 
 void TestingCondensation();
+
+const int n_threads_error = 64;
+const int n_threads_assembly = 64;
+
+// if H1_Q == 0 we are running H(div)
+int H1_Q = 0;
 
 int main(int argc, char *argv[])
 {
@@ -453,8 +459,8 @@ int main(int argc, char *argv[])
         sim_control->m_h_level_min = 0;
         sim_control->m_p_level_min = 1;
         sim_control->m_h_level_max = 3;
-        sim_control->m_p_level_max = 2;
-        sim_control->m_Hdiv_plusplus_Q = false;
+        sim_control->m_p_level_max = 1;
+        sim_control->m_Hdiv_plusplus_Q = true;
         sim_control->m_hybrid = true;
         sim_control->m_dry_run = false;
         sim_control->m_draw_vtk_Q = false;
@@ -464,13 +470,15 @@ int main(int argc, char *argv[])
         std::cout << "Running with command line arguments\n";
         sim_control = new TSimulationControl(argv);
     }
+    if(sim_control->m_run_type == EPyramid) H1_Q = 1;
     gCurrentRun = sim_control->m_geometry_type;
     std::cout << "Simulation control object with parameters " << std::endl;
     sim_control->Print();
     std::ofstream output("convergence_summary.txt",std::ios::app);
-#ifdef H1_Q
-    output << "****** RUNNING H1 APPROXIMATION *********\n";
-#endif
+    if(H1_Q)
+    {
+        output << "****** RUNNING H1 APPROXIMATION *********\n";
+    }
     ComputeApproximation(sim_control, output);
     return 0;
 }
@@ -719,8 +727,6 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 8;
-    const int n_threads_assembly = 8;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -760,128 +766,131 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             gmesh = GeometryConstruction(i,h,n_elements,sim_control);
             
             TPZManVector<TPZCompMesh*,2> meshvecOrig(2);
-            
-#ifndef H1_Q
-            
-            /// Construction for Hdiv (velocity) approximation space
-            meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
-            
-#ifdef PZDEBUG
-            {
-                std::ofstream out("FluxCMesh.vtk");
-                TPZVTKGeoMesh::PrintCMeshVTK(meshvecOrig[0],out);
-            }
-#endif
-            /// Construction for L2 (pressure) approximation space
-            meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
-            
-            bool has_pyramids_Q =
-            sim_control->m_geometry_type == ESphericalBarrierHePyTe ||
-            sim_control->m_geometry_type == EVerticalWellHePyTe ||
-            (sim_control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
-            
-            if ((run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4) && has_pyramids_Q)
-            {
-                IncreasePyramidSonOrder(meshvecOrig,sim_control,p);
-            }
-            
-//            ProjectAnalyticalSolution(meshvecOrig);
-            
-#ifdef LOG4CXX
-            if (logger->isDebugEnabled())
-            {
-                std::stringstream sout;
-                meshvecOrig[0]->Print(sout);
-                meshvecOrig[1]->Print(sout);
-                LOGPZ_DEBUG(logger, sout.str())
-            }
-#endif
-            // ------------------ Create CMesh multiphysics -------------------
-            TPZCompMesh *cmeshMultOrig = CreateCmeshMulti(meshvecOrig,sim_control);
-
             TPZCompMesh *cmesh = 0;
             TPZManVector<TPZCompMesh *,2> meshvec(2,0);
-            if(sim_control->m_hybrid)
+            int ndof = 0;
+            int ndof_cond = 0;
+
+
+            if(H1_Q == 0)
             {
-                std::cout << "Creating the hybrid mesh\n";
-                TPZHybridizeHDiv hybrid;
-                std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
-                bool groupelements = true;
-                chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig,groupelements);
-                TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
-                TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
-                delete cmeshMultOrig;
-                delete meshvecOrig[0];
-                int64_t nel = meshvecOrig[1]->NElements();
-                gmesh->ResetReference();
-                for (int64_t el=0; el<nel; el++) {
-                    TPZCompEl *cel = meshvecOrig[1]->Element(el);
-                    delete cel;
+                /// Construction for Hdiv (velocity) approximation space
+                meshvecOrig[0] = CreateCmeshFlux(gmesh, sim_control, p);
+
+    #ifdef PZDEBUG
+                {
+                    std::ofstream out("FluxCMesh.vtk");
+                    TPZVTKGeoMesh::PrintCMeshVTK(meshvecOrig[0],out);
                 }
-                delete meshvecOrig[1];
-#ifdef LOG4CXX
+    #endif
+                /// Construction for L2 (pressure) approximation space
+                meshvecOrig[1] = CreateCmeshPressure(gmesh, sim_control, p);
+
+                bool has_pyramids_Q =
+                sim_control->m_geometry_type == ESphericalBarrierHePyTe ||
+                sim_control->m_geometry_type == EVerticalWellHePyTe ||
+                (sim_control->m_geometry_type == EAcademic && run_type != ETetrahedra && run_type != EHexaHedra);
+
+                if ((run_type == EDividedPyramidIncreasedOrder || run_type == EDividedPyramidIncreasedOrder4) && has_pyramids_Q)
+                {
+                    IncreasePyramidSonOrder(meshvecOrig,sim_control,p);
+                }
+
+    //            ProjectAnalyticalSolution(meshvecOrig);
+
+    #ifdef LOG4CXX
                 if (logger->isDebugEnabled())
                 {
-//                    std::stringstream sout;
-                    std::ofstream sout("atomichybrid.txt");
-                    meshvecHybrid[0]->Print(sout);
-                    meshvecHybrid[1]->Print(sout);
-//                    LOGPZ_DEBUG(logger, sout.str())
+                    std::stringstream sout;
+                    meshvecOrig[0]->Print(sout);
+                    meshvecOrig[1]->Print(sout);
+                    LOGPZ_DEBUG(logger, sout.str())
                 }
-#endif
-                cmesh = cmeshMultHybrid;
-                meshvec = meshvecHybrid;
-                
-//                CheckNormalContinuity(meshvec[0]);
-                
+    #endif
+                // ------------------ Create CMesh multiphysics -------------------
+                TPZCompMesh *cmeshMultOrig = CreateCmeshMulti(meshvecOrig,sim_control);
+
+                if(sim_control->m_hybrid)
+                {
+                    std::cout << "Creating the hybrid mesh\n";
+                    TPZHybridizeHDiv hybrid;
+                    std::tuple<TPZCompMesh*, TPZVec<TPZCompMesh*> > chunk;
+                    bool groupelements = true;
+                    chunk = hybrid.Hybridize(cmeshMultOrig, meshvecOrig,groupelements);
+                    TPZCompMesh *cmeshMultHybrid = std::get<0>(chunk);
+                    TPZManVector<TPZCompMesh *,2> meshvecHybrid = std::get<1>(chunk);
+                    delete cmeshMultOrig;
+                    delete meshvecOrig[0];
+                    int64_t nel = meshvecOrig[1]->NElements();
+                    gmesh->ResetReference();
+                    for (int64_t el=0; el<nel; el++) {
+                        TPZCompEl *cel = meshvecOrig[1]->Element(el);
+                        delete cel;
+                    }
+                    delete meshvecOrig[1];
+    #ifdef LOG4CXX
+                    if (logger->isDebugEnabled())
+                    {
+    //                    std::stringstream sout;
+                        std::ofstream sout("atomichybrid.txt");
+                        meshvecHybrid[0]->Print(sout);
+                        meshvecHybrid[1]->Print(sout);
+    //                    LOGPZ_DEBUG(logger, sout.str())
+                    }
+    #endif
+                    cmesh = cmeshMultHybrid;
+                    meshvec = meshvecHybrid;
+
+    //                CheckNormalContinuity(meshvec[0]);
+
+                }
+                else
+                {
+
+                    GroupPyramidElements(cmeshMultOrig);
+                    TPZCompMeshTools::GroupElements(cmeshMultOrig);
+                    std::cout << "Created grouped elements\n";
+                    cmeshMultOrig->ComputeNodElCon();
+                    TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                    std::cout << "Created condensed elements\n";
+                    cmeshMultOrig->CleanUpUnconnectedNodes();
+                    cmeshMultOrig->ExpandSolution();
+
+                    cmesh = cmeshMultOrig;
+                    meshvec = meshvecOrig;
+                }
+
+    #ifdef PZDEBUG
+                if(0)
+                {
+                    std::cout << "Verifying approximation space consistency\n";
+                    /// verify if the approximation space for the flux is compatible with the approximation space of the pressure
+                    VerifyApproximationSpaceConsistency(meshvec);
+                }
+    #endif
+
+                cmesh->CleanUpUnconnectedNodes();
+                // Getting dof information before unwrap the mesh
+                ndof = meshvec[0]->Solution().Rows()+ meshvec[1]->Solution().Rows();
+                ndof_cond = cmesh->NEquations();
             }
             else
             {
-            
-                GroupPyramidElements(cmeshMultOrig);
-                TPZCompMeshTools::GroupElements(cmeshMultOrig);
-                std::cout << "Created grouped elements\n";
-                cmeshMultOrig->ComputeNodElCon();
-                TPZCompMeshTools::CreatedCondensedElements(cmeshMultOrig, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-                std::cout << "Created condensed elements\n";
-                cmeshMultOrig->CleanUpUnconnectedNodes();
-                cmeshMultOrig->ExpandSolution();
-                
-                cmesh = cmeshMultOrig;
-                meshvec = meshvecOrig;
-            }
-            
-#ifdef PZDEBUG
-            if(0)
-            {
-                std::cout << "Verifying approximation space consistency\n";
-                /// verify if the approximation space for the flux is compatible with the approximation space of the pressure
-                VerifyApproximationSpaceConsistency(meshvec);
-            }
-#endif
-            
-            cmesh->CleanUpUnconnectedNodes();
-            // Getting dof information before unwrap the mesh
-            int ndof = meshvec[0]->Solution().Rows()+ meshvec[1]->Solution().Rows();
-            int ndof_cond = cmesh->NEquations();
+                cmesh = CreateCGCmesh(gmesh, sim_control, p);
 
-#else
-            TPZCompMesh * cmesh = CreateCGCmesh(gmesh, sim_control, p);
-            
-            { // Static condensation for CG approximation
-                TPZCompMeshTools::GroupElements(cmesh);
-                std::cout << "Created grouped elements\n";
-                cmesh->ComputeNodElCon();
-                TPZCompMeshTools::CreatedCondensedElements(cmesh, keep_lagrangian_multiplier_Q, keep_matrix_Q);
-                std::cout << "Created condensed elements\n";
-                cmesh->CleanUpUnconnectedNodes();
-                cmesh->ExpandSolution();
-            }
-            
-            int ndof = cmesh->Solution().Rows();
-            int ndof_cond = cmesh->NEquations();
-#endif
+                { // Static condensation for CG approximation
+                    TPZCompMeshTools::GroupElements(cmesh);
+                    std::cout << "Created grouped elements\n";
+                    cmesh->ComputeNodElCon();
+                    TPZCompMeshTools::CreatedCondensedElements(cmesh, keep_lagrangian_multiplier_Q, keep_matrix_Q);
+                    std::cout << "Created condensed elements\n";
+                    cmesh->CleanUpUnconnectedNodes();
+                    cmesh->ExpandSolution();
+                }
 
+                ndof = cmesh->Solution().Rows();
+                ndof_cond = cmesh->NEquations();
+            }
             TPZManVector<REAL,3> errors(3,0.);
             REAL assemble_time(0.), solving_time(0.), error_time(0.);
             
@@ -927,30 +936,31 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     #endif
                 
                 TPZAutoPointer<TPZMatrix<STATE> > mat = an.Solver().Matrix();
-#ifndef H1_Q
-                if (use_pardiso_Q) {
-                    TPZSYsmpMatrix<STATE> *matloc = dynamic_cast<TPZSYsmpMatrix<STATE> *>(mat.operator ->());
-                    TPZVec<STATE> &a = matloc->A();
-                    an.Rhs() *= -1.;
-                    for(auto &itr:a) itr *= -1.;
-                    std::cout << "a[0] " << a[0] << std::endl;
-                    if(0)
+                if(H1_Q == 0)
+                {
+                    if (use_pardiso_Q) {
+                        TPZSYsmpMatrix<STATE> *matloc = dynamic_cast<TPZSYsmpMatrix<STATE> *>(mat.operator ->());
+                        TPZVec<STATE> &a = matloc->A();
+                        an.Rhs() *= -1.;
+                        for(auto &itr:a) itr *= -1.;
+                        std::cout << "a[0] " << a[0] << std::endl;
+                        if(0)
+                        {
+                            std::stringstream globname;
+                            globname << "globmatrix_" << i << ".txt";
+                            std::ofstream glob(globname.str());
+                            glob.precision(12);
+                            for(auto itr:a) glob << itr << std::endl;
+                        }
+                    }
+                    else
                     {
-                        std::stringstream globname;
-                        globname << "globmatrix_" << i << ".txt";
-                        std::ofstream glob(globname.str());
-                        glob.precision(12);
-                        for(auto itr:a) glob << itr << std::endl;
+                        TPZSkylMatrix<STATE> *skyl = dynamic_cast<TPZSkylMatrix<STATE> *>(mat.operator ->());
+                        (*skyl) *= -1.;
+                        an.Rhs() *= -1.;
+                        std::cout << "skyl(0,0) = " << skyl->Get(0,0) << std::endl;
                     }
                 }
-                else
-                {
-                    TPZSkylMatrix<STATE> *skyl = dynamic_cast<TPZSkylMatrix<STATE> *>(mat.operator ->());
-                    (*skyl) *= -1.;
-                    an.Rhs() *= -1.;
-                    std::cout << "skyl(0,0) = " << skyl->Get(0,0) << std::endl;
-                }
-#endif
                 std::cout << "Assembled! first element : " << mat->Get(0,0) <<  std::endl;
             
                 std::cout << "Starting Solve..." << std::endl;
@@ -968,9 +978,10 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 UnwrapMesh(cmesh);
                 an.LoadSolution();
                 cmesh->Solution() *= -1.0; // Because the material contributions are expressed in residual form
-#ifndef H1_Q
-                TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmesh);
-#endif
+                if(H1_Q == 0)
+                {
+                    TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmesh);
+                }
                 std::cout << "Solved!" << std::endl;
                
 #ifdef LOG4CXX2
@@ -993,13 +1004,11 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 an.Mesh()->Solution().Print("meshsol = ",out2,EMathematicaInput);
             }
 #ifdef PZDEBUG
-#ifndef H1_Q
                 if(0)
                 {
                     std::cout << "Verifying solution consistency\n";
                     TPZHybridizeHDiv::VerifySolutionConsistency(meshvec[0],std::cout);
                 }
-#endif
 #endif
                 // ------------------ Post Processing VTK -------------------
                 if (sim_control->m_draw_vtk_Q) {
@@ -1007,9 +1016,10 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                     std::cout << "Starting Post-processing..." << std::endl;
                     TPZStack<std::string> scalnames, vecnames;
                     scalnames.Push("p");
-#ifndef H1_Q
-                    scalnames.Push("div_q");
-#endif
+                    if(H1_Q == 0)
+                    {
+                        scalnames.Push("div_q");
+                    }
                     vecnames.Push("q");
                     std::string plotfile = "Approximated_Solution.vtk";
                     an.DefineGraphMesh(dim, scalnames, vecnames, plotfile);
@@ -1068,16 +1078,17 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             boost::posix_time::ptime deletion_t1 = boost::posix_time::microsec_clock::local_time();
 #endif
             delete cmesh;
-#ifndef H1_Q
-            delete meshvec[0];
-            int64_t nel = meshvec[1]->NElements();
-            gmesh->ResetReference();
-            for (int64_t el=0; el<nel; el++) {
-                TPZCompEl *cel = meshvec[1]->Element(el);
-                delete cel;
+            if(H1_Q ==0)
+            {
+                delete meshvec[0];
+                int64_t nel = meshvec[1]->NElements();
+                gmesh->ResetReference();
+                for (int64_t el=0; el<nel; el++) {
+                    TPZCompEl *cel = meshvec[1]->Element(el);
+                    delete cel;
+                }
+                delete meshvec[1];
             }
-            delete meshvec[1];
-#endif
             delete gmesh;
             
 #ifdef USING_BOOST
@@ -1139,11 +1150,11 @@ std::string PyramidApproxSpaceType(TSimulationControl * control){
         case EHexaHedra:
             type = "Conformal hexahedral mesh.";
             break;
-#ifdef H1_Q
         case EPyramid:
-            type = "Pyramid mesh.";
-            break;
-#endif
+            if(H1_Q) {
+                type = "Pyramid mesh.";
+                break;
+            }
         default:
             DebugStop();
             break;
