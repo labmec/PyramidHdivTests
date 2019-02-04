@@ -70,4 +70,5 @@ add_executable(HdivProjectionTests ${main_HdivProjection})
 target_link_libraries(HdivProjectionTests pz)
 
 configure_file(testsequence.txt testsequence.txt COPYONLY)
+configure_file(testsequence.txt testsequenceH1.txt COPYONLY)
 
