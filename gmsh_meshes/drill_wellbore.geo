@@ -74,9 +74,16 @@ Plane Surface(8) = {8};
 
 base[] = {1,2,3,4,5,6,7,8};
 
+If(mesh_type == 0)
 Extrude {0, 0, h} {
-  Surface{base[]}; 
+  Surface{base[]};
+  Layers{1}; 
 }
+Else
+Extrude {0, 0, h} {
+  Surface{base[]};
+}
+EndIf
 
 // Line Groups
 wellbore_v_edges[] = {71,36,32,58};
@@ -173,7 +180,7 @@ Transfinite Line {outer_v_edges[],box_v_edges[]} = n_vertical; // Vertical contr
 //Transfinite Surface{mid_surf[],reservoir_bc[],top_bottom_reservoir_bc[]};
 Transfinite Surface "*";
 Transfinite Volume "*";
-Recombine Surface{mid_surf_rad[],top_bottom_reservoir_bc[],reservoir_bc[]};
+Recombine Surface{mid_surf_rad[],top_bottom_reservoir_bc[],reservoir_bc[],reservoir_bc[]}; 
 
 
 // Meshing directives for volumes
@@ -202,7 +209,7 @@ Physical Surface("inner_bc") = {wellbore_bc[]};
 Physical Surface("non_flux_bc") = {top_bottom_wellbore_region_bc[], top_bottom_reservoir_bc[]};
 
 
-Another_entities = 0;
+Another_entities = 1;
 If(Another_entities)
 Physical Surface("non_flux_res") = {top_bottom_reservoir_bc[]};
 Physical Surface("non_flux_well") = {top_bottom_wellbore_region_bc[]};
