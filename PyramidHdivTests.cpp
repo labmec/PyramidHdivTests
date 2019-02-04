@@ -246,6 +246,13 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
             flux_and_f(2,0) = -1.0*(dfdr * Radialunitz + dfdTheta * Thetaunitz);
             
             flux_and_f(3,0) = 0.0;
+            
+            u[0] = pt[0];
+            flux_and_f(0,0) = -1.0;
+            flux_and_f(1,0) = 0.;
+            flux_and_f(2,0) = 0.;
+            flux_and_f(3,0) = 0.0;
+            
             return;
         }
         case ESphericalBarrierHe:
@@ -299,7 +306,8 @@ void Analytic(const TPZVec<REAL> &pt, TPZVec<STATE> &u, TPZFMatrix<STATE> &flux_
             
             flux_and_f(3,0) = 0.0;
         }
-    }    
+    }
+    
 }
 
 void AnalyticPotential(const TPZVec<REAL> &pt, TPZVec<STATE> &u) {
@@ -448,7 +456,7 @@ int main(int argc, char *argv[])
 //        sim_control->m_run_type = EDividedPyramidIncreasedOrder4;
         sim_control->m_run_type = EPyramid;
         sim_control->m_geometry_type = EAcademic;
-//        sim_control->m_geometry_type = EVerticalWellHePyTe;
+        sim_control->m_geometry_type = EVerticalWellTe;
 //        sim_control->m_geometry_type = ESphericalBarrierHePyTe;
 //        sim_control->m_geometry_type = ESphericalBarrierHe;
 //        sim_control->m_geometry_type = ESphericalBarrierTe;
@@ -461,7 +469,7 @@ int main(int argc, char *argv[])
         sim_control->m_h_level_max = 3;
         sim_control->m_p_level_max = 1;
         sim_control->m_Hdiv_plusplus_Q = false;
-        sim_control->m_hybrid = true;
+        sim_control->m_hybrid = false;
         sim_control->m_dry_run = false;
         sim_control->m_draw_vtk_Q = false;
     }
@@ -727,8 +735,8 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
     /// Hard code controls
     bool should_renumber_Q = true;
     bool use_pardiso_Q = true;
-    const int n_threads_error = 8;
-    const int n_threads_assembly = 8;
+    const int n_threads_error = 12;
+    const int n_threads_assembly = 12;
     bool keep_lagrangian_multiplier_Q = true;
     bool keep_matrix_Q = false;
     TPZGeoMesh *gmesh = NULL;
@@ -894,6 +902,7 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
             TPZCompMesh * cmesh = CreateCGCmesh(gmesh, sim_control, p);
             
             { // Static condensation for CG approximation
+                GroupPyramidElements(cmesh);
                 TPZCompMeshTools::GroupElements(cmesh);
                 std::cout << "Created grouped elements\n";
                 cmesh->ComputeNodElCon();
@@ -988,7 +997,12 @@ int ComputeApproximation(TSimulationControl * sim_control, std::ostream &output)
                 
                 UnwrapMesh(cmesh);
                 an.LoadSolution();
+#ifdef H1_Q
+                an.Solution() *= -1.0; // Because the material contributions are expressed in residual form
+                // Because the solution of the analysis object does not update the sing as in the next line.
+#endif
                 cmesh->Solution() *= -1.0; // Because the material contributions are expressed in residual form
+                
 #ifndef H1_Q
                 TPZBuildMultiphysicsMesh::TransferFromMultiPhysics(meshvec, cmesh);
 #endif
@@ -2841,7 +2855,6 @@ TPZCompMesh * CreateCmeshMulti(TPZVec<TPZCompMesh *> &meshvec, TSimulationContro
 
 TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int p_order)
 {
-    const int int_p_order = 10;
     int dim = gmesh->Dimension();
     TPZCompMesh *cmesh = new TPZCompMesh(gmesh);
     
@@ -2853,14 +2866,14 @@ TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int
             const int dirichlet = 0;
             TPZPrimalPoisson * mat = new TPZPrimalPoisson(matid);
             {
-                TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing,int_p_order);
+                TPZDummyFunction<STATE> *force = new TPZDummyFunction<STATE>(BodyForcing,gIntegrationOrder);
                 force->SetPolynomialOrder(gIntegrationOrder);
                 TPZAutoPointer<TPZFunction<STATE> > bodyforce = force;
                 
                 mat->SetForcingFunction(bodyforce);
             }
             {
-                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,int_p_order);
+                TPZDummyFunction<STATE> *analytic_f = new TPZDummyFunction<STATE>(Analytic,gIntegrationOrder);
                 analytic_f->SetPolynomialOrder(gIntegrationOrder);
                 TPZAutoPointer<TPZFunction<STATE> > analytic = analytic_f;
                 mat->SetForcingFunctionExact(analytic);
@@ -2873,7 +2886,7 @@ TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int
             TPZBndCond * BCond0 = NULL;
             BCond0 = mat->CreateBC(mat, bc0,dirichlet, val1, val2);
             {
-                TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+                TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,gIntegrationOrder);
                 boundforce->SetPolynomialOrder(gIntegrationOrder);
                 TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
                 BCond0->SetForcingFunction(0,force);
@@ -2897,7 +2910,63 @@ TPZCompMesh * CreateCGCmesh(TPZGeoMesh *gmesh, TSimulationControl * control, int
             int bc_impervious_id = 4;
             int dirichlet = 0;
             
-            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,int_p_order);
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,gIntegrationOrder);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_inner);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
+            bc_impervious->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellTe:
+        {
+            const int matid = 1;
+            TPZPrimalPoisson * mat = new TPZPrimalPoisson(matid);
+            cmesh->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,gIntegrationOrder);
+            boundforce->SetPolynomialOrder(gIntegrationOrder);
+            TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
+            
+            TPZFMatrix<> val1(3,3,0.), val2(3,1,0.);
+            TPZBndCond * bc_outer = mat->CreateBC(mat, bc_outer_id ,dirichlet, val1, val2);
+            bc_outer->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_outer);
+            TPZBndCond * bc_inner = mat->CreateBC(mat, bc_inner_id ,dirichlet, val1, val2);
+            bc_inner->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_inner);
+            TPZBndCond * bc_impervious = mat->CreateBC(mat, bc_impervious_id ,dirichlet, val1, val2);
+            bc_impervious->SetForcingFunction(0,force);
+            cmesh->InsertMaterialObject(bc_impervious);
+            
+        }
+            break;
+        case EVerticalWellHePyTe:
+        {
+            const int matid = 1;
+            TPZPrimalPoisson * mat = new TPZPrimalPoisson(matid);
+            cmesh->InsertMaterialObject(mat);
+            
+            int bc_outer_id = 2;
+            int bc_inner_id = 3;
+            int bc_impervious_id = 4;
+            int dirichlet = 0;
+            
+            TPZDummyFunction<STATE> *boundforce = new TPZDummyFunction<STATE>(Forcing,gIntegrationOrder);
             boundforce->SetPolynomialOrder(gIntegrationOrder);
             TPZAutoPointer<TPZFunction<STATE> > force = boundforce;
             
